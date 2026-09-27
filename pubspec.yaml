@@ -49,6 +49,7 @@ dependencies:
   file_picker: ^13.1.0
   fl_chart: ^1.2.0
   crypto: ^3.0.7
+  archive: ^4.3.0
 
 dev_dependencies:
   flutter_test:

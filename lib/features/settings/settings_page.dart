@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../ai/llm_client.dart';
 import '../../data/secrets.dart';
+import '../../integrations/garmin/garmin_settings_section.dart';
 import '../../providers.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -124,7 +125,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ],
           const Divider(height: 32),
           Text('Garmin Connect', style: text.titleMedium),
-          const Text('Login and sync come in the next milestone.'),
+          const GarminSettingsSection(),
         ],
       ),
     );
