@@ -64,6 +64,36 @@ class Activities extends Table {
   TextColumn get fitPath => text().nullable()();
 }
 
+/// Per-second streams of an activity, packed little-endian (see
+/// `activity_streams.dart`). Missing values: NaN (floats), 0 (HR),
+/// 0x7FFFFFFF (positions).
+class ActivityStreams extends Table {
+  IntColumn get activityId => integer().references(Activities, #id)();
+  IntColumn get sampleCount => integer()();
+
+  /// Int32 seconds since start.
+  BlobColumn get seconds => blob()();
+
+  /// Float32 m/s.
+  BlobColumn get speed => blob().nullable()();
+
+  /// Uint8 bpm.
+  BlobColumn get heartRate => blob().nullable()();
+
+  /// Float32 metres since start.
+  BlobColumn get distance => blob().nullable()();
+
+  /// Int32 semicircles.
+  BlobColumn get latitude => blob().nullable()();
+  BlobColumn get longitude => blob().nullable()();
+
+  /// Float32 metres.
+  BlobColumn get altitude => blob().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {activityId};
+}
+
 class Goals extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
@@ -105,6 +135,7 @@ class KeyValues extends Table {
   AthleteProfiles,
   FitnessSnapshots,
   Activities,
+  ActivityStreams,
   Goals,
   PlannedWorkouts,
   KeyValues,
@@ -114,7 +145,14 @@ class AppDatabase extends _$AppDatabase {
       : super(executor ?? driftDatabase(name: 'formforge'));
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onUpgrade: (m, from, to) async {
+          if (from < 2) await m.createTable(activityStreams);
+        },
+      );
 
   Future<String?> getSetting(String key) async =>
       (await (select(keyValues)..where((t) => t.key.equals(key)))

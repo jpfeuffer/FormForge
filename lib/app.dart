@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'features/activities/activities_page.dart';
+import 'features/activities/activity_detail_page.dart';
 import 'features/calendar/calendar_page.dart';
 import 'features/fitness/fitness_page.dart';
 import 'features/settings/settings_page.dart';
@@ -35,6 +36,16 @@ final _destinations = [
   ),
 ];
 
+final _childRoutes = {
+  '/activities': [
+    GoRoute(
+      path: ':id',
+      builder: (_, state) => ActivityDetailPage(
+          id: int.tryParse(state.pathParameters['id']!) ?? -1),
+    ),
+  ],
+};
+
 final router = GoRouter(
   initialLocation: '/today',
   routes: [
@@ -43,7 +54,11 @@ final router = GoRouter(
       branches: [
         for (final d in _destinations)
           StatefulShellBranch(routes: [
-            GoRoute(path: d.path, builder: (_, _) => d.page),
+            GoRoute(
+              path: d.path,
+              builder: (_, _) => d.page,
+              routes: _childRoutes[d.path] ?? const [],
+            ),
           ]),
       ],
     ),

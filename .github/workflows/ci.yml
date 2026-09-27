@@ -25,6 +25,12 @@ jobs:
           dart pub get
           dart analyze --fatal-infos
           dart test
+      - name: fit_io tests
+        working-directory: packages/fit_io
+        run: |
+          dart pub get
+          dart analyze --fatal-infos
+          dart test
       - run: flutter pub get
       - run: dart run build_runner build --delete-conflicting-outputs
       - run: flutter analyze

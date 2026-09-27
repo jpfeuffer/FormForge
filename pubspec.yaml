@@ -44,6 +44,11 @@ dependencies:
   intl: ^0.20.3
   training_core:
     path: packages/training_core
+  fit_io:
+    path: packages/fit_io
+  file_picker: ^13.1.0
+  fl_chart: ^1.2.0
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:
