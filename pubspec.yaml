@@ -44,6 +44,8 @@ dependencies:
   intl: ^0.20.3
   training_core:
     path: packages/training_core
+  crypto: ^3.0.7
+  archive: ^4.3.0
 
 dev_dependencies:
   flutter_test:
