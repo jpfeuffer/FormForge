@@ -1,3 +1,4 @@
+import 'pauses.dart';
 import 'zone.dart';
 
 /// One recorded data point of an activity stream.
@@ -26,7 +27,7 @@ abstract final class RunEvaluation {
     for (var i = 1; i < samples.length; i++) {
       final dt = samples[i].second - samples[i - 1].second;
       final v = value(samples[i]);
-      if (dt <= 0 || v == null) continue;
+      if (dt <= 0 || dt > Pauses.maxGap || v == null) continue;
       total += dt;
       if (zone.contains(v)) inside += dt;
     }
@@ -46,7 +47,8 @@ abstract final class RunEvaluation {
     for (var i = 1; i < samples.length; i++) {
       final s = samples[i];
       final dt = s.second - samples[i - 1].second;
-      if (dt <= 0 || s.speed == null || s.hr == null || s.hr == 0) continue;
+      if (dt <= 0 || dt > Pauses.maxGap) continue;
+      if (s.speed == null || s.hr == null || s.hr == 0) continue;
       speedSum += s.speed! * dt;
       hrSum += s.hr! * dt;
       weight += dt;

@@ -120,7 +120,11 @@ class FitImportService {
     final start = activity.startTime.value;
     final streams = records.isEmpty
         ? null
-        : ActivityStreamData.fromFitRecords(records, start);
+        : ActivityStreamData.fromFitRecords(
+            records,
+            start,
+            pauses: fit.timerPauses,
+          );
 
     final dir = Directory('${(await _storageDir()).path}/fit');
     await dir.create(recursive: true);

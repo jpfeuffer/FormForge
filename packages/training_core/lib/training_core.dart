@@ -8,6 +8,7 @@ export 'src/heart_rate.dart';
 export 'src/load.dart';
 export 'src/mas.dart';
 export 'src/pace.dart';
+export 'src/pauses.dart';
 export 'src/performance.dart';
 export 'src/plan/feasibility.dart';
 export 'src/plan/generator.dart';

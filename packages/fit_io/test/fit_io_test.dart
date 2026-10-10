@@ -177,6 +177,26 @@ void main() {
       expect(fitDateTime(5), isNull);
       expect(toFitDateTime(DateTime.utc(1989, 12, 31, 0, 1)), 60);
     });
+
+    test('timer stop/start events become pauses', () {
+      final t0 = toFitDateTime(activityStart);
+      final w = FitWriter();
+      void event(int offset, int type) => w.write(FitMesgNum.event, [
+            FitField(FitCommonField.timestamp, FitBaseType.uint32, t0 + offset),
+            const FitField(FitEventField.event, FitBaseType.enumType, 0),
+            FitField(FitEventField.eventType, FitBaseType.enumType, type),
+          ]);
+      event(0, FitEventType.start);
+      event(100, FitEventType.stopAll);
+      event(160, FitEventType.start);
+      event(300, FitEventType.stop);
+      event(301, FitEventType.stopAll);
+      event(330, FitEventType.start);
+      event(600, FitEventType.stopAll);
+      final a = FitActivity.fromFile(const FitDecoder().decode(w.finish()));
+      DateTime at(int s) => activityStart.add(Duration(seconds: s));
+      expect(a.timerPauses, [(at(100), at(160)), (at(300), at(330))]);
+    });
   });
 
   group('workout', () {

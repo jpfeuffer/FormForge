@@ -80,6 +80,9 @@ class ActivityStreams extends Table {
   /// Float32 metres.
   BlobColumn get altitude => blob().nullable()();
 
+  /// Int32 pairs of watch timer stop/start seconds; empty = none, null = unknown.
+  BlobColumn get timerStops => blob().nullable()();
+
   @override
   Set<Column> get primaryKey => {activityId};
 }
@@ -167,7 +170,7 @@ class AppDatabase extends _$AppDatabase {
       : super(executor ?? driftDatabase(name: 'formforge'));
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -178,6 +181,19 @@ class AppDatabase extends _$AppDatabase {
             await m.deleteTable(plannedWorkouts.actualTableName);
             await m.createTable(trainingPlans);
             await m.createTable(plannedWorkouts);
+          }
+          if (from < 4) {
+            // Tables created above already have the column.
+            if (from >= 2) {
+              await m.addColumn(activityStreams, activityStreams.timerStops);
+              // Sample-based Garmin streams used timer time, which hides
+              // pauses; dropping them makes the next sync refetch them.
+              await customStatement(
+                'DELETE FROM activity_streams WHERE activity_id IN '
+                "(SELECT id FROM activities WHERE source = 'garmin' "
+                'AND fit_path IS NULL)',
+              );
+            }
           }
         },
         beforeOpen: (details) async {

@@ -51,6 +51,7 @@ class _ActivityChartsState extends State<ActivityCharts> {
     if (_s.seconds.length < 2) return const SizedBox.shrink();
     final theme = Theme.of(context);
     final (minX, maxX) = _zoom ?? (_fullMin, _fullMax);
+    final pauses = _s.pauses;
     double paceY(double speed) => -Pace.secondsPerKm(speed);
     final pace = _downsample(
       _s.seconds,
@@ -58,6 +59,7 @@ class _ActivityChartsState extends State<ActivityCharts> {
       (v) => v >= 1 ? paceY(v) : null,
       from: minX,
       to: maxX,
+      pauses: pauses,
     );
     final hr = _downsample(
       _s.seconds,
@@ -65,6 +67,7 @@ class _ActivityChartsState extends State<ActivityCharts> {
       (v) => v.toDouble(),
       from: minX,
       to: maxX,
+      pauses: pauses,
     );
     // Race pace duplicates one of the others, so it gets no band.
     final paceZones = widget.paces == null
@@ -88,6 +91,7 @@ class _ActivityChartsState extends State<ActivityCharts> {
       color: theme.colorScheme.onSurface,
       label: label,
       bands: bands,
+      pauses: pauses,
       minX: minX,
       maxX: maxX,
       selection: selection,
@@ -100,26 +104,31 @@ class _ActivityChartsState extends State<ActivityCharts> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 24),
-        if (_zoom == null)
+        if (_zoom == null) ...[
+          _TimeSplitLine(
+            Pauses.split(pauses, _s.seconds.first, _s.seconds.last),
+            pauses,
+          ),
           Text(
             'Drag across a chart to zoom into a range.',
             style: theme.textTheme.bodySmall,
-          )
-        else
+          ),
+        ] else
           _SelectionSummary(
             streams: _s,
+            pauses: pauses,
             from: minX,
             to: maxX,
             onReset: () => setState(() => _zoom = null),
           ),
-        if (pace.isNotEmpty)
+        if (pace.any((s) => !s.y.isNaN))
           card(
             'Pace (min/km)',
             pace,
             (y) => Pace.format(1000 / -y),
             _bands(paceZones, (z) => (paceY(z.lower), paceY(z.upper))),
           ),
-        if (hr.isNotEmpty)
+        if (hr.any((s) => !s.y.isNaN))
           card(
             'Heart rate (bpm)',
             hr,
@@ -134,12 +143,14 @@ class _ActivityChartsState extends State<ActivityCharts> {
 class _SelectionSummary extends StatelessWidget {
   const _SelectionSummary({
     required this.streams,
+    required this.pauses,
     required this.from,
     required this.to,
     required this.onReset,
   });
 
   final ActivityStreamData streams;
+  final List<Pause> pauses;
   final double from;
   final double to;
   final VoidCallback onReset;
@@ -151,9 +162,9 @@ class _SelectionSummary extends StatelessWidget {
       for (var i = 0; i < s.seconds.length; i++)
         if (s.seconds[i] >= from * 60 && s.seconds[i] <= to * 60) i,
     ];
-    final seconds = idx.isEmpty
-        ? 0
-        : s.seconds[idx.last] - s.seconds[idx.first];
+    final split = idx.isEmpty
+        ? null
+        : Pauses.split(pauses, s.seconds[idx.first], s.seconds[idx.last]);
     double? meters;
     final dist = [for (final i in idx) s.distance?[i]].nonNulls;
     if (dist.length >= 2) {
@@ -162,9 +173,8 @@ class _SelectionSummary extends StatelessWidget {
       var sum = 0.0;
       for (var k = 1; k < idx.length; k++) {
         final v = speed[idx[k]];
-        if (v != null) {
-          sum += v * (s.seconds[idx[k]] - s.seconds[idx[k - 1]]);
-        }
+        final dt = s.seconds[idx[k]] - s.seconds[idx[k - 1]];
+        if (v != null && dt <= Pauses.maxGap) sum += v * dt;
       }
       meters = sum;
     }
@@ -182,10 +192,11 @@ class _SelectionSummary extends StatelessWidget {
           '${clock(from)}–${clock(to)}',
           style: Theme.of(context).textTheme.titleSmall,
         ),
-        Text(formatDuration(Duration(seconds: seconds))),
+        if (split != null) _TimeSplitLine(split, pauses, inline: true),
         if (meters != null && meters > 0) ...[
           Text(formatKm(meters)),
-          if (seconds > 0) Text('${Pace.format(meters / seconds)} /km'),
+          if (split != null && split.moving > 0)
+            Text('${Pace.format(meters / split.moving)} /km'),
         ],
         if (avgHr != null) Text('${avgHr.round()} bpm'),
         TextButton.icon(
@@ -194,6 +205,34 @@ class _SelectionSummary extends StatelessWidget {
           label: const Text('Reset zoom'),
         ),
       ],
+    );
+  }
+}
+
+/// "Elapsed · moving · paused · standing" for a range.
+class _TimeSplitLine extends StatelessWidget {
+  const _TimeSplitLine(this.split, this.pauses, {this.inline = false});
+
+  final TimeSplit split;
+  final List<Pause> pauses;
+  final bool inline;
+
+  @override
+  Widget build(BuildContext context) {
+    String t(int s) => formatDuration(Duration(seconds: s));
+    final parts = [
+      if (!inline || split.moving != split.elapsed) 'Elapsed ${t(split.elapsed)}',
+      'Moving ${t(split.moving)}',
+      if (split.paused > 0) 'Paused ${t(split.paused)}',
+      if (split.stopped > 0) 'Standing ${t(split.stopped)}',
+    ];
+    final count = pauses.where((p) => p.kind == PauseKind.paused).length;
+    return Text(
+      [
+        ...parts,
+        if (!inline && count > 0) '$count× paused',
+      ].join(' · '),
+      style: inline ? null : Theme.of(context).textTheme.bodyMedium,
     );
   }
 }
@@ -237,6 +276,7 @@ List<FlSpot> _downsample<T extends num>(
   double? Function(T) map, {
   required double from,
   required double to,
+  List<Pause> pauses = const [],
   int buckets = 300,
 }) {
   if (values == null || seconds.isEmpty) return const [];
@@ -249,19 +289,39 @@ List<FlSpot> _downsample<T extends num>(
     last--;
   }
   final size = math.max(1, ((last - first) / buckets).ceil());
+  final pausedStarts = [
+    for (final p in pauses)
+      if (p.kind == PauseKind.paused) p.start,
+  ];
+  bool breakBefore(int i) =>
+      seconds[i] - seconds[i - 1] > Pauses.maxGap ||
+      pausedStarts.any((s) => s >= seconds[i - 1] && s < seconds[i]);
+
   final spots = <FlSpot>[];
-  for (var start = first; start < last; start += size) {
-    final end = math.min(start + size, last);
-    var sum = 0.0, n = 0;
-    for (var i = start; i < end; i++) {
-      final v = values[i];
-      final y = v == null ? null : map(v);
-      if (y == null) continue;
-      sum += y;
-      n++;
+  var sum = 0.0, n = 0, bucketStart = first;
+  void flush(int end) {
+    if (n > 0) {
+      spots.add(FlSpot(seconds[(bucketStart + end) ~/ 2] / 60, sum / n));
     }
-    if (n > 0) spots.add(FlSpot(seconds[(start + end) ~/ 2] / 60, sum / n));
+    sum = 0;
+    n = 0;
+    bucketStart = end;
   }
+
+  for (var i = first; i < last; i++) {
+    if (i > first && breakBefore(i)) {
+      flush(i);
+      if (spots.isNotEmpty && !spots.last.y.isNaN) spots.add(FlSpot.nullSpot);
+    } else if (i - bucketStart >= size) {
+      flush(i);
+    }
+    final v = values[i];
+    final y = v == null ? null : map(v);
+    if (y == null) continue;
+    sum += y;
+    n++;
+  }
+  flush(last);
   return spots;
 }
 
@@ -272,6 +332,7 @@ class _ChartCard extends StatefulWidget {
     required this.color,
     required this.label,
     required this.bands,
+    required this.pauses,
     required this.minX,
     required this.maxX,
     required this.selection,
@@ -285,6 +346,7 @@ class _ChartCard extends StatefulWidget {
   final Color color;
   final String Function(double y) label;
   final List<_Band> bands;
+  final List<Pause> pauses;
   final double minX;
   final double maxX;
   final (double, double)? selection;
@@ -309,7 +371,7 @@ class _ChartCardState extends State<_ChartCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final small = theme.textTheme.labelSmall;
-    final ys = widget.spots.map((s) => s.y);
+    final ys = widget.spots.map((s) => s.y).where((y) => !y.isNaN);
     final lo = ys.reduce(math.min), hi = ys.reduce(math.max);
     final pad = math.max((hi - lo) * 0.05, 1.0);
     final minY = lo - pad, maxY = hi + pad;
@@ -317,6 +379,12 @@ class _ChartCardState extends State<_ChartCard> {
       for (final b in widget.bands)
         if (math.max(b.y1, b.y2) > minY && math.min(b.y1, b.y2) < maxY) b,
     ];
+    final shown = [
+      for (final p in widget.pauses)
+        if (p.end / 60 > widget.minX && p.start / 60 < widget.maxX) p,
+    ];
+    final pausedColor = theme.colorScheme.onSurface.withValues(alpha: 0.22);
+    final standingColor = theme.colorScheme.onSurface.withValues(alpha: 0.09);
     final sel = widget.selection;
     final span = widget.maxX - widget.minX;
 
@@ -380,6 +448,14 @@ class _ChartCardState extends State<_ChartCard> {
                           ),
                       ],
                       verticalRangeAnnotations: [
+                        for (final p in shown)
+                          VerticalRangeAnnotation(
+                            x1: math.max(p.start / 60, widget.minX),
+                            x2: math.min(p.end / 60, widget.maxX),
+                            color: p.kind == PauseKind.paused
+                                ? pausedColor
+                                : standingColor,
+                          ),
                         if (sel != null)
                           VerticalRangeAnnotation(
                             x1: math.min(sel.$1, sel.$2),
@@ -449,19 +525,25 @@ class _ChartCardState extends State<_ChartCard> {
               ),
             ),
           ),
-          if (visible.isNotEmpty) ...[
+          if (visible.isNotEmpty || shown.isNotEmpty) ...[
             const SizedBox(height: 6),
             Wrap(
               spacing: 12,
               runSpacing: 2,
               children: [
-                for (final b in visible)
+                for (final (color, label) in [
+                  for (final b in visible) (b.color, b.label),
+                  if (shown.any((p) => p.kind == PauseKind.paused))
+                    (pausedColor, 'paused'),
+                  if (shown.any((p) => p.kind == PauseKind.stopped))
+                    (standingColor, 'standing'),
+                ])
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     spacing: 4,
                     children: [
-                      Icon(Icons.square, size: 10, color: b.color),
-                      Text(b.label, style: small),
+                      Icon(Icons.square, size: 10, color: color),
+                      Text(label, style: small),
                     ],
                   ),
               ],

@@ -102,14 +102,17 @@ List<Sample> samplesFromDetails(Map<String, Object?> details) {
   double? firstTimestamp;
   for (final row in (details['activityDetailMetrics'] as List?) ?? const []) {
     final values = (row as Map)['metrics'] as List? ?? const [];
-    var second =
-        metric(values, 'sumDuration') ?? metric(values, 'sumElapsedDuration');
+    // Wall-clock time so pauses stay visible as gaps; timer time last.
+    var second = metric(values, 'sumElapsedDuration');
     if (second == null) {
       final ts = metric(values, 'directTimestamp');
-      if (ts == null) continue;
-      firstTimestamp ??= ts;
-      second = (ts - firstTimestamp) / 1000;
+      if (ts != null) {
+        firstTimestamp ??= ts;
+        second = (ts - firstTimestamp) / 1000;
+      }
     }
+    second ??= metric(values, 'sumDuration');
+    if (second == null) continue;
     samples.add(
       Sample(
         second: second.round(),

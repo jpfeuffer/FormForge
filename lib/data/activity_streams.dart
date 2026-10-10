@@ -18,6 +18,7 @@ class ActivityStreamData {
     this.latitude,
     this.longitude,
     this.altitude,
+    this.timerStops,
   }) : assert(
          [
            speed,
@@ -37,13 +38,16 @@ class ActivityStreamData {
     latitude: _maybe(row.latitude, (b) => _unpackInt32(b, _missingPosition)),
     longitude: _maybe(row.longitude, (b) => _unpackInt32(b, _missingPosition)),
     altitude: _maybe(row.altitude, _unpackFloat32),
+    timerStops: row.timerStops == null ? null : unpackStops(row.timerStops!),
   );
 
-  /// Records with a timestamp, relative to [start].
+  /// Records with a timestamp, relative to [start]; [pauses] are the FIT
+  /// timer stop/start intervals.
   factory ActivityStreamData.fromFitRecords(
     List<FitRecord> records,
-    DateTime start,
-  ) => ActivityStreamData(
+    DateTime start, {
+    List<(DateTime, DateTime)> pauses = const [],
+  }) => ActivityStreamData(
     seconds: [for (final r in records) r.timestamp!.difference(start).inSeconds],
     speed: [for (final r in records) r.speed],
     heartRate: [for (final r in records) r.heartRate],
@@ -51,6 +55,10 @@ class ActivityStreamData {
     latitude: [for (final r in records) r.positionLat],
     longitude: [for (final r in records) r.positionLong],
     altitude: [for (final r in records) r.altitude],
+    timerStops: [
+      for (final (a, b) in pauses)
+        (a.difference(start).inSeconds, b.difference(start).inSeconds),
+    ],
   );
 
   factory ActivityStreamData.fromSamples(List<Sample> samples) =>
@@ -80,7 +88,14 @@ class ActivityStreamData {
   /// Metres.
   final List<double?>? altitude;
 
+  /// Watch timer stop/start seconds; null when unknown (no FIT file).
+  final List<(int, int)>? timerStops;
+
   int get length => seconds.length;
+
+  /// Paused and standing-still intervals.
+  List<Pause> get pauses =>
+      Pauses.detect(seconds, speed, timerStops: timerStops);
 
   List<Sample> toSamples() => [
     for (var i = 0; i < length; i++)
@@ -104,7 +119,16 @@ class ActivityStreamData {
     latitude: Value(_pack(latitude, (v) => _packInt32(v, _missingPosition))),
     longitude: Value(_pack(longitude, (v) => _packInt32(v, _missingPosition))),
     altitude: Value(_pack(altitude, _packFloat32)),
+    timerStops: Value(timerStops == null ? null : packStops(timerStops!)),
   );
+}
+
+Uint8List packStops(List<(int, int)> stops) =>
+    _packInt32([for (final (a, b) in stops) ...[a, b]], 0);
+
+List<(int, int)> unpackStops(Uint8List bytes) {
+  final v = _unpackInt32(bytes, null);
+  return [for (var i = 0; i + 1 < v.length; i += 2) (v[i]!, v[i + 1]!)];
 }
 
 Uint8List? _pack<T>(List<T?>? values, Uint8List Function(List<T?>) pack) =>

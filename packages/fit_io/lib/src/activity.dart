@@ -147,12 +147,45 @@ class FitActivity {
             file.byNum(FitMesgNum.session).map(FitSession.fromMessage).toList(),
         laps = file.byNum(FitMesgNum.lap).map(FitLap.fromMessage).toList(),
         records =
-            file.byNum(FitMesgNum.record).map(FitRecord.fromMessage).toList();
+            file.byNum(FitMesgNum.record).map(FitRecord.fromMessage).toList(),
+        events =
+            file.byNum(FitMesgNum.event).map(FitEvent.fromMessage).toList();
 
   final FitFileId? fileId;
   final List<FitSession> sessions;
   final List<FitLap> laps;
   final List<FitRecord> records;
+  final List<FitEvent> events;
 
   bool get isActivity => fileId?.type == FitFileType.activity;
+
+  /// Intervals between a timer stop (manual or auto pause) and the next start.
+  List<(DateTime, DateTime)> get timerPauses {
+    final pauses = <(DateTime, DateTime)>[];
+    DateTime? stoppedAt;
+    for (final e in events) {
+      final t = e.timestamp;
+      if (e.event != FitEventValue.timer || t == null) continue;
+      if (FitEventType.isStop(e.eventType)) {
+        stoppedAt ??= t;
+      } else if (e.eventType == FitEventType.start && stoppedAt != null) {
+        if (t.isAfter(stoppedAt)) pauses.add((stoppedAt, t));
+        stoppedAt = null;
+      }
+    }
+    return pauses;
+  }
+}
+
+class FitEvent {
+  FitEvent.fromMessage(FitMessage m)
+      : timestamp = fitDateTime(m.timestamp),
+        event = m.intValue(FitEventField.event),
+        eventType = m.intValue(FitEventField.eventType),
+        data = m.intValue(FitEventField.data);
+
+  final DateTime? timestamp;
+  final int? event;
+  final int? eventType;
+  final int? data;
 }

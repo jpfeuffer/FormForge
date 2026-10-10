@@ -69,6 +69,29 @@ abstract final class FitRecordField {
   static const enhancedAltitude = 78;
 }
 
+abstract final class FitEventField {
+  static const event = 0;
+  static const eventType = 1;
+
+  /// For timer events: timer_trigger (0 manual, 1 auto, 2 fitness equipment).
+  static const data = 3;
+}
+
+abstract final class FitEventValue {
+  static const timer = 0;
+}
+
+abstract final class FitEventType {
+  static const start = 0;
+  static const stop = 1;
+  static const stopAll = 4;
+  static const stopDisable = 8;
+  static const stopDisableAll = 9;
+
+  static bool isStop(int? t) =>
+      t == stop || t == stopAll || t == stopDisable || t == stopDisableAll;
+}
+
 abstract final class FitWorkoutField {
   static const sport = 4;
   static const numValidSteps = 6;

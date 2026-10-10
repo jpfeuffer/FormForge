@@ -254,7 +254,11 @@ class GarminSyncService {
       await file.writeAsBytes(fitBytes!, flush: true);
       await _merger.enrich(
         activity.id,
-        streams: ActivityStreamData.fromFitRecords(records, activity.startTime),
+        streams: ActivityStreamData.fromFitRecords(
+          records,
+          activity.startTime,
+          pauses: fit!.timerPauses,
+        ),
         fitPath: file.path,
       );
       return true;
