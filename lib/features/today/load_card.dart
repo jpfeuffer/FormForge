@@ -12,6 +12,10 @@ class LoadCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    // Fixed hues: theme primary/error are both warm with the orange seed.
+    final fitness = dark ? Colors.lightBlue.shade300 : Colors.blue.shade700;
+    final fatigue = dark ? Colors.pink.shade200 : Colors.pink.shade400;
     final all = ref.watch(trainingLoadProvider).value ?? const [];
     final points = all.length > _days ? all.sublist(all.length - _days) : all;
     final last = points.lastOrNull;
@@ -45,10 +49,10 @@ class LoadCard extends ConsumerWidget {
                     lineBarsData: [
                       _line([
                         for (final p in points) p.ctl,
-                      ], theme.colorScheme.primary),
+                      ], fitness),
                       _line([
                         for (final p in points) p.atl,
-                      ], theme.colorScheme.error),
+                      ], fatigue),
                     ],
                     gridData: const FlGridData(show: false),
                     borderData: FlBorderData(show: false),
@@ -60,14 +64,10 @@ class LoadCard extends ConsumerWidget {
               Row(
                 spacing: 4,
                 children: [
-                  Icon(
-                    Icons.circle,
-                    size: 10,
-                    color: theme.colorScheme.primary,
-                  ),
+                  Icon(Icons.circle, size: 10, color: fitness),
                   Text('fitness', style: theme.textTheme.labelSmall),
                   const SizedBox(width: 8),
-                  Icon(Icons.circle, size: 10, color: theme.colorScheme.error),
+                  Icon(Icons.circle, size: 10, color: fatigue),
                   Text('fatigue', style: theme.textTheme.labelSmall),
                 ],
               ),
