@@ -1,5 +1,7 @@
 library;
 
+export 'src/adaptation.dart';
+export 'src/compliance.dart';
 export 'src/critical_speed.dart';
 export 'src/evaluation.dart';
 export 'src/heart_rate.dart';
@@ -16,6 +18,7 @@ export 'src/plan/templates.dart';
 export 'src/plan/validator.dart';
 export 'src/riegel.dart';
 export 'src/strength.dart';
+export 'src/test_evaluation.dart';
 export 'src/vdot.dart';
 export 'src/workout.dart';
 export 'src/zone.dart';

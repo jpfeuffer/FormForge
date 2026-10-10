@@ -2,7 +2,7 @@ import 'zone.dart';
 
 /// One recorded data point of an activity stream.
 class Sample {
-  const Sample({required this.second, this.speed, this.hr});
+  const Sample({required this.second, this.speed, this.hr, this.distance});
 
   /// Seconds since activity start.
   final int second;
@@ -12,6 +12,9 @@ class Sample {
 
   /// bpm
   final int? hr;
+
+  /// Metres since activity start; when absent, speed is integrated.
+  final double? distance;
 }
 
 /// Post-run analysis of HR and pace streams.
