@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:training_core/training_core.dart';
 
 import '../../providers.dart';
+import '../../integrations/garmin/garmin_providers.dart';
+import '../../integrations/garmin/garmin_sync_providers.dart';
 import '../../util/format.dart';
 import 'activity_providers.dart';
 
@@ -23,15 +25,60 @@ class ActivitiesPage extends ConsumerWidget {
     }
   }
 
+  Future<void> _sync(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    await ref.read(garminSyncControllerProvider.notifier).run();
+    final state = ref.read(garminSyncControllerProvider);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          state.hasError
+              ? 'Garmin sync failed: ${state.error}'
+              : 'Garmin sync: ${state.value?.message ?? 'done'}',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final activities = ref.watch(activitiesProvider);
     final fmt = DateFormat.yMMMEd().add_Hm();
+    final connected = ref.watch(garminAccountProvider).value != null;
+    final syncing = ref.watch(garminSyncControllerProvider).isLoading;
+    final syncOnStart = ref.watch(garminSyncOnStartProvider).value ?? false;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Activities'),
         actions: [
+          if (connected) ...[
+            if (syncing)
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox.square(
+                  dimension: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else
+              IconButton(
+                tooltip: 'Sync with Garmin',
+                icon: const Icon(Icons.sync),
+                onPressed: () => _sync(context, ref),
+              ),
+            PopupMenuButton<void>(
+              itemBuilder: (_) => [
+                CheckedPopupMenuItem(
+                  checked: syncOnStart,
+                  onTap: () => ref
+                      .read(garminSyncOnStartProvider.notifier)
+                      .set(!syncOnStart),
+                  child: const Text('Sync on app start'),
+                ),
+              ],
+            ),
+          ],
           IconButton(
             tooltip: 'Import FIT',
             icon: const Icon(Icons.upload_file),

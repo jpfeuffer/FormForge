@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:drift/drift.dart';
+import 'package:fit_io/fit_io.dart' show FitRecord;
 import 'package:training_core/training_core.dart';
 
 import 'database.dart';
@@ -38,6 +39,28 @@ class ActivityStreamData {
     altitude: _maybe(row.altitude, _unpackFloat32),
   );
 
+  /// Records with a timestamp, relative to [start].
+  factory ActivityStreamData.fromFitRecords(
+    List<FitRecord> records,
+    DateTime start,
+  ) => ActivityStreamData(
+    seconds: [for (final r in records) r.timestamp!.difference(start).inSeconds],
+    speed: [for (final r in records) r.speed],
+    heartRate: [for (final r in records) r.heartRate],
+    distance: [for (final r in records) r.distance],
+    latitude: [for (final r in records) r.positionLat],
+    longitude: [for (final r in records) r.positionLong],
+    altitude: [for (final r in records) r.altitude],
+  );
+
+  factory ActivityStreamData.fromSamples(List<Sample> samples) =>
+      ActivityStreamData(
+        seconds: [for (final s in samples) s.second],
+        speed: [for (final s in samples) s.speed],
+        heartRate: [for (final s in samples) s.hr],
+        distance: [for (final s in samples) s.distance],
+      );
+
   /// Seconds since activity start.
   final List<int> seconds;
 
@@ -61,7 +84,12 @@ class ActivityStreamData {
 
   List<Sample> toSamples() => [
     for (var i = 0; i < length; i++)
-      Sample(second: seconds[i], speed: speed?[i], hr: heartRate?[i]),
+      Sample(
+        second: seconds[i],
+        speed: speed?[i],
+        hr: heartRate?[i],
+        distance: distance?[i],
+      ),
   ];
 
   ActivityStreamsCompanion toCompanion(

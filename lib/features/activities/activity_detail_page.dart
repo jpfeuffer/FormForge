@@ -9,6 +9,7 @@ import 'package:training_core/training_core.dart';
 import '../../data/activity_streams.dart';
 import '../../data/database.dart';
 import '../../util/format.dart';
+import '../adaptation/compliance_section.dart';
 import 'activity_analysis.dart';
 import 'activity_providers.dart';
 
@@ -77,6 +78,7 @@ class _Details extends ConsumerWidget {
               _Stat('hrTSS', analysis!.hrTss!.round().toString()),
           ],
         ),
+        ComplianceSection(activityId: a.id),
         if (analysis != null && analysis.hrZones.isNotEmpty) ...[
           const SizedBox(height: 24),
           Text(
