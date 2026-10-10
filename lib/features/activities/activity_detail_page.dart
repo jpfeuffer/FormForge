@@ -7,6 +7,7 @@ import '../../data/database.dart';
 import '../../providers.dart';
 import '../../util/format.dart';
 import '../adaptation/compliance_section.dart';
+import '../adaptation/match_widgets.dart';
 import 'activity_analysis.dart';
 import 'activity_charts.dart';
 import 'activity_providers.dart';
@@ -76,6 +77,7 @@ class _Details extends ConsumerWidget {
               _Stat('hrTSS', analysis!.hrTss!.round().toString()),
           ],
         ),
+        PlannedLinkSection(activityId: a.id),
         ComplianceSection(activityId: a.id),
         if (analysis != null && analysis.hrZones.isNotEmpty) ...[
           const SizedBox(height: 24),

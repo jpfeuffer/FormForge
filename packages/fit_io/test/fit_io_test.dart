@@ -197,6 +197,22 @@ void main() {
       DateTime at(int s) => activityStart.add(Duration(seconds: s));
       expect(a.timerPauses, [(at(100), at(160)), (at(300), at(330))]);
     });
+
+    test('workout name of an activity started from a workout', () {
+      FitActivity read(String? name) {
+        final w = FitWriter();
+        if (name != null) {
+          w.write(FitMesgNum.workout, [
+            FitField(FitWorkoutField.wktName, FitBaseType.string, name),
+          ]);
+        }
+        return FitActivity.fromFile(const FitDecoder().decode(w.finish()));
+      }
+
+      expect(read('10 × 200 m [FF]').workoutName, '10 × 200 m [FF]');
+      expect(read('  ').workoutName, isNull);
+      expect(read(null).workoutName, isNull);
+    });
   });
 
   group('workout', () {

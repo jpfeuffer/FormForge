@@ -66,6 +66,15 @@ class ActivityMerger {
           await (_db.update(_db.activities)..where((t) => t.id.equals(keepId)))
               .write(ActivitiesCompanion(fitPath: Value(drop.fitPath)));
         }
+        if (keep.workoutName == null && drop.workoutName != null) {
+          await (_db.update(_db.activities)..where((t) => t.id.equals(keepId)))
+              .write(
+                ActivitiesCompanion(
+                  workoutName: Value(drop.workoutName),
+                  workoutChecked: const Value(true),
+                ),
+              );
+        }
         await (_db.update(_db.fitnessSnapshots)
               ..where((t) => t.activityId.equals(dropId)))
             .write(FitnessSnapshotsCompanion(activityId: Value(keepId)));
@@ -78,10 +87,12 @@ class ActivityMerger {
       });
 
   /// Gives [activityId] the streams and FIT file it lacks; false if it had both.
+  /// [workoutName] is the name found in that FIT file (null if it has none).
   Future<bool> enrich(
     int activityId, {
     ActivityStreamData? streams,
     String? fitPath,
+    String? workoutName,
   }) => _db.transaction(() async {
     var changed = false;
     if (streams != null && !await _hasStreams(activityId)) {
@@ -94,7 +105,13 @@ class ActivityMerger {
       final updated =
           await (_db.update(_db.activities)
                 ..where((t) => t.id.equals(activityId) & t.fitPath.isNull()))
-              .write(ActivitiesCompanion(fitPath: Value(fitPath)));
+              .write(
+                ActivitiesCompanion(
+                  fitPath: Value(fitPath),
+                  workoutName: Value(workoutName),
+                  workoutChecked: const Value(true),
+                ),
+              );
       changed |= updated > 0;
     }
     return changed;

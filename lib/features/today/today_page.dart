@@ -11,6 +11,7 @@ import '../../integrations/garmin/garmin_sync_providers.dart';
 import '../../providers.dart';
 import '../../util/format.dart';
 import '../adaptation/adaptation_providers.dart';
+import '../adaptation/match_widgets.dart';
 import '../adaptation/verdict_style.dart';
 import 'load_card.dart';
 import 'suggestion_card.dart';
@@ -32,6 +33,8 @@ class TodayPage extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         children: [
           for (final s in suggestions) SuggestionCard(suggestion: s),
+          const MatchSuggestionCards(),
+          const AutoLinkedNotes(),
           const _PlannedToday(),
           const SizedBox(height: 8),
           const _LastEvaluation(),
