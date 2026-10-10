@@ -24,6 +24,21 @@ final class StrengthSession {
     this.style = StrengthStyle.calisthenics,
   });
 
+  static const version = 1;
+
+  factory StrengthSession.fromJson(Map<String, Object?> json) {
+    final v = json['v'];
+    if (v != version) {
+      throw FormatException('Unsupported strength session version', v);
+    }
+    return StrengthSession(
+      focusAreas: _focusAreasFromJson(json['focusAreas']),
+      duration: Duration(seconds: json['durationS'] as int),
+      rpe: json['rpe'] as int,
+      style: StrengthStyle.values.byName(json['style'] as String),
+    );
+  }
+
   static const _legLoading = {
     FocusArea.lowerBody,
     FocusArea.plyometrics,
@@ -45,6 +60,14 @@ final class StrengthSession {
 
   String get description =>
       '${style.name}: ${focusAreas.map((f) => f.name).join(', ')} (RPE $rpe)';
+
+  Map<String, Object?> toJson() => {
+        'v': version,
+        'focusAreas': [for (final f in focusAreas) f.name],
+        'durationS': duration.inSeconds,
+        'rpe': rpe,
+        'style': style.name,
+      };
 
   WorkoutStep get step => WorkoutStep(
       kind: StepKind.strength,
@@ -99,6 +122,11 @@ final class StrengthSession {
       i == Intensity.recovery ? 'Recovery run' : 'Easy run';
 }
 
+List<FocusArea> _focusAreasFromJson(Object? json) => [
+      for (final f in (json as List?) ?? const [])
+        FocusArea.values.byName(f as String)
+    ];
+
 enum StrengthGoalKind { none, runningSupport, secondaryGoal }
 
 final class StrengthGoal {
@@ -116,6 +144,22 @@ final class StrengthGoal {
         sessionsPerWeek = 0,
         style = StrengthStyle.calisthenics,
         sessionDuration = Duration.zero;
+
+  factory StrengthGoal.fromJson(Map<String, Object?> json) => StrengthGoal(
+        kind: StrengthGoalKind.values.byName(json['kind'] as String),
+        focusAreas: _focusAreasFromJson(json['focusAreas']),
+        sessionsPerWeek: json['sessionsPerWeek'] as int,
+        style: StrengthStyle.values.byName(json['style'] as String),
+        sessionDuration: Duration(seconds: json['sessionDurationS'] as int),
+      );
+
+  Map<String, Object?> toJson() => {
+        'kind': kind.name,
+        'focusAreas': [for (final f in focusAreas) f.name],
+        'sessionsPerWeek': sessionsPerWeek,
+        'style': style.name,
+        'sessionDurationS': sessionDuration.inSeconds,
+      };
 
   final StrengthGoalKind kind;
 

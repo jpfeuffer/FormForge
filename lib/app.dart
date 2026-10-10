@@ -6,6 +6,7 @@ import 'features/activities/activity_detail_page.dart';
 import 'features/calendar/calendar_page.dart';
 import 'features/fitness/fitness_page.dart';
 import 'features/plan/plan_page.dart';
+import 'features/plan/plan_wizard_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/today/today_page.dart';
 
@@ -45,6 +46,9 @@ final _childRoutes = {
       builder: (_, state) => ActivityDetailPage(
           id: int.tryParse(state.pathParameters['id']!) ?? -1),
     ),
+  ],
+  '/plan': [
+    GoRoute(path: 'new', builder: (_, _) => const PlanWizardPage()),
   ],
 };
 
