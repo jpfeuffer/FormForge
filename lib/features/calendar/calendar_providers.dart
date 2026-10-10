@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:training_core/training_core.dart';
 
 import '../../data/database.dart';
 import '../../providers.dart';
+import '../plan/plan_providers.dart';
 import 'calendar_models.dart';
 import 'calendar_repository.dart';
 
@@ -12,8 +15,13 @@ final calendarRepositoryProvider = Provider<CalendarRepository>(
   (ref) => CalendarRepository(ref.watch(databaseProvider)),
 );
 
-// TODO: derive from the active plan's PlanRequest availability.
-final calendarAvailabilityProvider = Provider<WeeklyAvailability?>((_) => null);
+/// Availability of the active plan; null without a plan.
+final calendarAvailabilityProvider = Provider<WeeklyAvailability?>((ref) {
+  final json = ref.watch(activePlanProvider).value?.requestJson;
+  if (json == null) return null;
+  return PlanRequest.fromJson(jsonDecode(json) as Map<String, Object?>)
+      .availability;
+});
 
 /// Real paces when known, else a conservative default for estimates.
 final effectivePaceProvider = Provider<PaceProfile>(

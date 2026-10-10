@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:training_core/training_core.dart';
 
+import '../../integrations/garmin/garmin_push_button.dart';
 import '../../providers.dart';
 import 'calendar_models.dart';
 import 'calendar_providers.dart';
@@ -43,6 +44,7 @@ class CalendarPage extends ConsumerWidget {
             onPressed: () => nav.step(mode, 1),
             icon: const Icon(Icons.chevron_right),
           ),
+          GarminPushButton(from: range.from, to: range.to),
         ],
       ),
       body: Column(

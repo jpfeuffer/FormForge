@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:training_core/training_core.dart' show CurrentFitness, TestType;
 
+import '../../data/plan_repository.dart';
+import '../plan/plan_providers.dart';
+
 /// Rebuilds the not-yet-done part of a plan with new fitness.
 abstract interface class PlanRegenerator {
   /// Regenerates the workouts of [planId] from [from] (default: tomorrow) on,
@@ -31,9 +34,19 @@ abstract interface class PlanAdjuster {
   });
 }
 
-/// TODO(plan): override with a `PlanRepository.regenerateFuture` adapter;
-/// until then Apply is disabled for plan changes.
-final planRegeneratorProvider = Provider<PlanRegenerator?>((_) => null);
+final planRegeneratorProvider = Provider<PlanRegenerator?>(
+  (ref) => _RepositoryRegenerator(ref.watch(planRepositoryProvider)),
+);
 
-/// TODO(plan): no implementation yet.
+class _RepositoryRegenerator implements PlanRegenerator {
+  _RepositoryRegenerator(this._repo);
+  final PlanRepository _repo;
+
+  @override
+  Future<int> regenerateFuture(int planId,
+          {DateTime? from, CurrentFitness? fitness}) =>
+      _repo.regenerateFuture(planId, from: from, fitness: fitness);
+}
+
+/// TODO(plan): no implementation yet; Apply stays hidden for these actions.
 final planAdjusterProvider = Provider<PlanAdjuster?>((_) => null);
