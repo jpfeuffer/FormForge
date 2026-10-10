@@ -5,6 +5,7 @@ import 'features/activities/activities_page.dart';
 import 'features/activities/activity_detail_page.dart';
 import 'features/calendar/calendar_page.dart';
 import 'features/fitness/fitness_page.dart';
+import 'features/plan/plan_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/today/today_page.dart';
 
@@ -16,6 +17,7 @@ final _destinations = [
     icon: Icons.calendar_month,
     page: const CalendarPage()
   ),
+  (path: '/plan', label: 'Plan', icon: Icons.flag, page: const PlanPage()),
   (
     path: '/activities',
     label: 'Activities',

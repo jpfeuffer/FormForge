@@ -1,24 +1,14 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:training_core/training_core.dart' show SessionKind;
+
+export 'package:training_core/training_core.dart' show SessionKind;
 
 part 'database.g.dart';
 
 enum ActivitySource { garmin, fitFile, manual }
 
 enum FitnessSource { race, timeTrial, halfCooper, lthrTest, detected, manual }
-
-enum WorkoutKind {
-  easy,
-  recovery,
-  long,
-  threshold,
-  interval,
-  repetition,
-  marathonPace,
-  test,
-  strength,
-  combined,
-}
 
 enum WorkoutStatus { planned, done, partial, skipped }
 
@@ -105,21 +95,52 @@ class Goals extends Table {
 
 class PlannedWorkouts extends Table {
   IntColumn get id => integer().autoIncrement()();
+
+  /// Null for manually added workouts.
+  IntColumn get planId => integer().nullable().references(TrainingPlans, #id)();
   IntColumn get goalId => integer().nullable().references(Goals, #id)();
+  IntColumn get weekIndex => integer().nullable()();
+
+  /// Local calendar day (midnight); see [startMinute] for an optional time.
   DateTimeColumn get date => dateTime()();
-  TextColumn get kind => textEnum<WorkoutKind>()();
+  IntColumn get startMinute => integer().nullable()();
+  TextColumn get kind => textEnum<SessionKind>()();
   TextColumn get title => text()();
 
-  /// Structured steps (workout DSL) as JSON.
-  TextColumn get stepsJson => text().withDefault(const Constant('[]'))();
+  /// training_core `Workout.toJson()` (versioned).
+  TextColumn get workoutJson => text()();
 
-  /// Strength focus areas (JSON list) for strength/combined sessions.
-  TextColumn get focusAreasJson => text().nullable()();
+  /// training_core strength session JSON for strength/combined sessions.
+  TextColumn get strengthJson => text().nullable()();
+  BoolColumn get isKey => boolean().withDefault(const Constant(false))();
+  TextColumn get notes => text().nullable()();
   TextColumn get status =>
       textEnum<WorkoutStatus>().withDefault(Constant(WorkoutStatus.planned.name))();
   TextColumn get garminWorkoutId => text().nullable()();
   TextColumn get garminScheduleId => text().nullable()();
+
+  /// Hash of the workout as last pushed to Garmin, to detect stale pushes.
+  TextColumn get garminSyncedHash => text().nullable()();
+  DateTimeColumn get garminSyncedAt => dateTime().nullable()();
   IntColumn get activityId => integer().nullable().references(Activities, #id)();
+
+  /// Evaluation of the matched activity against the plan (JSON).
+  TextColumn get complianceJson => text().nullable()();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+class TrainingPlans extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get goalId => integer().nullable().references(Goals, #id)();
+  TextColumn get name => text()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get startDate => dateTime()();
+  DateTimeColumn get endDate => dateTime()();
+
+  /// Serialized training_core `PlanRequest`, to regenerate/adapt the plan.
+  TextColumn get requestJson => text()();
+  TextColumn get warningsJson => text().withDefault(const Constant('[]'))();
+  BoolColumn get active => boolean().withDefault(const Constant(true))();
 }
 
 /// Non-secret app settings. Secrets live in secure storage.
@@ -137,6 +158,7 @@ class KeyValues extends Table {
   Activities,
   ActivityStreams,
   Goals,
+  TrainingPlans,
   PlannedWorkouts,
   KeyValues,
 ])
@@ -145,12 +167,21 @@ class AppDatabase extends _$AppDatabase {
       : super(executor ?? driftDatabase(name: 'formforge'));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onUpgrade: (m, from, to) async {
           if (from < 2) await m.createTable(activityStreams);
+          if (from < 3) {
+            // No UI could create planned workouts before v3, so recreate.
+            await m.deleteTable(plannedWorkouts.actualTableName);
+            await m.createTable(trainingPlans);
+            await m.createTable(plannedWorkouts);
+          }
+        },
+        beforeOpen: (details) async {
+          await customStatement('PRAGMA foreign_keys = ON');
         },
       );
 
@@ -174,6 +205,14 @@ class AppDatabase extends _$AppDatabase {
         ..orderBy([(t) => OrderingTerm.desc(t.date)])
         ..limit(1))
       .watchSingleOrNull();
+
+  /// Latest snapshot that can pace workouts (has VDOT or MAS).
+  Stream<FitnessSnapshot?> watchLatestPacingFitness() =>
+      (select(fitnessSnapshots)
+            ..where((t) => t.vdot.isNotNull() | t.masMps.isNotNull())
+            ..orderBy([(t) => OrderingTerm.desc(t.date)])
+            ..limit(1))
+          .watchSingleOrNull();
 
   Stream<List<Activity>> watchActivities() => (select(activities)
         ..orderBy([(t) => OrderingTerm.desc(t.startTime)]))

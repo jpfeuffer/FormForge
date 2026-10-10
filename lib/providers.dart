@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:training_core/training_core.dart';
 
 import 'ai/llm_client.dart';
 import 'data/database.dart';
@@ -20,6 +21,21 @@ final latestFitnessProvider = StreamProvider<FitnessSnapshot?>(
 
 final activitiesProvider = StreamProvider<List<Activity>>(
     (ref) => ref.watch(databaseProvider).watchActivities());
+
+final _pacingFitnessProvider = StreamProvider<FitnessSnapshot?>(
+    (ref) => ref.watch(databaseProvider).watchLatestPacingFitness());
+
+/// Current paces for resolving symbolic workout targets; null until a test
+/// or race with VDOT/MAS is logged. Race pace defaults to marathon pace.
+final paceProfileProvider = Provider<PaceProfile?>((ref) {
+  final fitness = ref.watch(_pacingFitnessProvider).value;
+  if (fitness == null) return null;
+  return PaceProfile.fromFitness(
+    vdot: fitness.vdot,
+    mas: fitness.masMps,
+    lthr: ref.watch(profileProvider).value?.lthr,
+  );
+});
 
 abstract final class SettingKeys {
   static const llmKind = 'llm.kind';

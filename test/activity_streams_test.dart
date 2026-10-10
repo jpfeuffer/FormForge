@@ -53,7 +53,7 @@ void main() {
     ]);
   });
 
-  test('schema v1 databases get activity_streams on upgrade', () async {
+  test('schema v1 databases get new tables on upgrade', () async {
     final db = AppDatabase(
       NativeDatabase.memory(
         setup: (raw) => raw.execute('PRAGMA user_version = 1'),
@@ -61,6 +61,8 @@ void main() {
     );
     addTearDown(db.close);
     expect(await db.select(db.activityStreams).get(), isEmpty);
-    expect(db.schemaVersion, 2);
+    expect(await db.select(db.trainingPlans).get(), isEmpty);
+    expect(await db.select(db.plannedWorkouts).get(), isEmpty);
+    expect(db.schemaVersion, 3);
   });
 }
