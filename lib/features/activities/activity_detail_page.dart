@@ -8,6 +8,7 @@ import 'package:training_core/training_core.dart';
 
 import '../../data/activity_streams.dart';
 import '../../data/database.dart';
+import '../../providers.dart';
 import '../../util/format.dart';
 import '../adaptation/compliance_section.dart';
 import 'activity_analysis.dart';
@@ -88,7 +89,13 @@ class _Details extends ConsumerWidget {
           const SizedBox(height: 8),
           for (final z in analysis.hrZones) _ZoneBar(z),
         ],
-        if (streams != null) ..._charts(context, streams),
+        if (streams != null)
+          ..._charts(
+            context,
+            streams,
+            ref.watch(paceProfileProvider),
+            [for (final z in analysis?.hrZones ?? const <ZoneTime>[]) z.zone],
+          ),
         if (streams == null)
           const Padding(
             padding: EdgeInsets.only(top: 24),
@@ -98,33 +105,82 @@ class _Details extends ConsumerWidget {
     );
   }
 
-  List<Widget> _charts(BuildContext context, ActivityStreamData s) {
+  List<Widget> _charts(
+    BuildContext context,
+    ActivityStreamData s,
+    PaceProfile? paces,
+    List<Zone> hrZones,
+  ) {
     final scheme = Theme.of(context).colorScheme;
     // Negated seconds per km so that faster pace plots higher.
+    double paceY(double speed) => -Pace.secondsPerKm(speed);
     final pace = _downsample(
       s.seconds,
       s.speed,
-      (v) => v >= 1 ? -Pace.secondsPerKm(v) : null,
+      (v) => v >= 1 ? paceY(v) : null,
     );
     final hr = _downsample(s.seconds, s.heartRate, (v) => v.toDouble());
+    // Race pace duplicates one of the others, so it gets no band.
+    final paceZones = paces == null
+        ? const <Zone>[]
+        : [
+            for (final i in Intensity.values)
+              if (i != Intensity.racePace) paces.speedFor(i),
+          ];
     return [
       if (pace.isNotEmpty)
         _ChartCard(
           title: 'Pace (min/km)',
           spots: pace,
-          color: scheme.primary,
+          color: scheme.onSurface,
           label: (y) => Pace.format(1000 / -y),
+          bands: _bands(
+            paceZones,
+            (z) => (paceY(z.lower), paceY(z.upper)),
+          ),
         ),
       if (hr.isNotEmpty)
         _ChartCard(
           title: 'Heart rate (bpm)',
           spots: hr,
-          color: scheme.error,
+          color: scheme.onSurface,
           label: (y) => y.round().toString(),
+          bands: _bands(hrZones, (z) => (z.lower, z.upper)),
         ),
     ];
   }
 }
+
+class _Band {
+  const _Band(this.y1, this.y2, this.color, this.label);
+  final double y1;
+  final double y2;
+  final Color color;
+  final String label;
+}
+
+const _zonePalette = [
+  Colors.blue,
+  Colors.teal,
+  Colors.green,
+  Colors.amber,
+  Colors.orange,
+  Colors.deepOrange,
+  Colors.red,
+];
+
+/// Zones ordered easy → hard, coloured cool → hot.
+List<_Band> _bands(List<Zone> zones, (double, double) Function(Zone) toY) => [
+  for (final (i, z) in zones.indexed)
+    _Band(
+      toY(z).$1,
+      toY(z).$2,
+      _zonePalette[zones.length < 2
+          ? 0
+          : (i * (_zonePalette.length - 1) / (zones.length - 1)).round()],
+      z.name,
+    ),
+];
 
 /// Averages [values] into at most [buckets] spots; x in minutes.
 List<FlSpot> _downsample<T extends num>(
@@ -216,17 +272,27 @@ class _ChartCard extends StatelessWidget {
     required this.spots,
     required this.color,
     required this.label,
+    this.bands = const [],
   });
 
   final String title;
   final List<FlSpot> spots;
   final Color color;
   final String Function(double y) label;
+  final List<_Band> bands;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final small = theme.textTheme.labelSmall;
+    final ys = spots.map((s) => s.y);
+    final lo = ys.reduce(math.min), hi = ys.reduce(math.max);
+    final pad = math.max((hi - lo) * 0.05, 1.0);
+    final minY = lo - pad, maxY = hi + pad;
+    final visible = [
+      for (final b in bands)
+        if (math.max(b.y1, b.y2) > minY && math.min(b.y1, b.y2) < maxY) b,
+    ];
     return Padding(
       padding: const EdgeInsets.only(top: 24),
       child: Column(
@@ -238,6 +304,18 @@ class _ChartCard extends StatelessWidget {
             height: 180,
             child: LineChart(
               LineChartData(
+                minY: minY,
+                maxY: maxY,
+                rangeAnnotations: RangeAnnotations(
+                  horizontalRangeAnnotations: [
+                    for (final b in visible)
+                      HorizontalRangeAnnotation(
+                        y1: math.max(math.min(b.y1, b.y2), minY),
+                        y2: math.min(math.max(b.y1, b.y2), maxY),
+                        color: b.color.withValues(alpha: 0.18),
+                      ),
+                  ],
+                ),
                 lineBarsData: [
                   LineChartBarData(
                     spots: spots,
@@ -285,6 +363,24 @@ class _ChartCard extends StatelessWidget {
               ),
             ),
           ),
+          if (visible.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 12,
+              runSpacing: 2,
+              children: [
+                for (final b in visible)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    spacing: 4,
+                    children: [
+                      Icon(Icons.square, size: 10, color: b.color),
+                      Text(b.label, style: small),
+                    ],
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );
