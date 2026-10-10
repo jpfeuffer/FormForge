@@ -17,6 +17,7 @@ export 'src/plan/rules.dart';
 export 'src/plan/templates.dart';
 export 'src/plan/validator.dart';
 export 'src/riegel.dart';
+export 'src/schedule_check.dart';
 export 'src/strength.dart';
 export 'src/test_evaluation.dart';
 export 'src/vdot.dart';
