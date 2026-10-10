@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'features/activities/activities_page.dart';
 import 'features/activities/activity_detail_page.dart';
 import 'features/calendar/calendar_page.dart';
+import 'features/calendar/workout_detail_page.dart';
 import 'features/fitness/fitness_page.dart';
 import 'features/plan/plan_page.dart';
 import 'features/settings/settings_page.dart';
@@ -39,6 +40,13 @@ final _destinations = [
 ];
 
 final _childRoutes = {
+  '/calendar': [
+    GoRoute(
+      path: 'workout/:id',
+      builder: (_, state) => WorkoutDetailPage(
+          id: int.tryParse(state.pathParameters['id']!) ?? -1),
+    ),
+  ],
   '/activities': [
     GoRoute(
       path: ':id',
