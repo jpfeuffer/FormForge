@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'garmin_exceptions.dart';
 import 'garmin_providers.dart';
+import 'garmin_push_button.dart';
+import 'garmin_push_providers.dart';
 
 class GarminSettingsSection extends ConsumerStatefulWidget {
   const GarminSettingsSection({super.key});
@@ -16,6 +18,7 @@ class _GarminSettingsSectionState extends ConsumerState<GarminSettingsSection> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   var _busy = false;
+  double? _progress;
   String? _error;
 
   @override
@@ -66,6 +69,37 @@ class _GarminSettingsSectionState extends ConsumerState<GarminSettingsSection> {
     );
   });
 
+  Future<void> _push() => _run(() async {
+    final today = DateTime.now();
+    final from = DateTime(today.year, today.month, today.day);
+    try {
+      await pushToGarmin(
+        context,
+        ref,
+        from,
+        DateTime(from.year, from.month, from.day + 13),
+        onProgress: (done, total) {
+          if (mounted) setState(() => _progress = done / total);
+        },
+      );
+    } finally {
+      if (mounted) setState(() => _progress = null);
+    }
+  });
+
+  Future<void> _cleanup() => _run(() async {
+    final today = DateTime.now();
+    final result = await ref
+        .read(garminPushServiceProvider)
+        .cleanupOrphans(
+          from: DateTime(today.year, today.month, today.day - 7),
+          to: DateTime(today.year, today.month, today.day + 120),
+        );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(result.message)));
+  });
+
   Future<void> _logout() =>
       _run(() => ref.read(garminAccountProvider.notifier).logout());
 
@@ -105,12 +139,25 @@ class _GarminSettingsSectionState extends ConsumerState<GarminSettingsSection> {
             icon: _busy ? const _Spinner() : const Icon(Icons.sync),
             label: const Text('Sync recent activities'),
           ),
+          FilledButton.tonalIcon(
+            onPressed: _busy ? null : _push,
+            icon: const Icon(Icons.cloud_upload_outlined),
+            label: const Text('Push next 14 days to Garmin'),
+          ),
+          OutlinedButton(
+            onPressed: _busy ? null : _cleanup,
+            child: const Text('Clean up old FormForge workouts'),
+          ),
           OutlinedButton(
             onPressed: _busy ? null : _logout,
             child: const Text('Logout'),
           ),
         ],
       ),
+      if (_progress != null) ...[
+        const SizedBox(height: 8),
+        LinearProgressIndicator(value: _progress),
+      ],
     ],
   );
 
