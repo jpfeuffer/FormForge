@@ -309,7 +309,9 @@ class _WorkoutEditorState extends ConsumerState<_WorkoutEditor> {
       ),
       SessionKind.threshold ||
       SessionKind.interval ||
-      SessionKind.repetition => Column(
+      SessionKind.repetition ||
+      SessionKind.marathonPace ||
+      SessionKind.racePace => Column(
         key: key,
         children: [
           Row(
@@ -371,19 +373,45 @@ class _WorkoutEditorState extends ConsumerState<_WorkoutEditor> {
             ],
           ),
           const SizedBox(height: 12),
+          _intensity(),
+          const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(child: _intensity()),
-              const SizedBox(width: 12),
               Expanded(
                 child: IntField(
-                  label: 'Recovery',
-                  suffix: 'sec',
-                  value: spec.recoverySeconds,
-                  onChanged: (v) => setState(() => spec.recoverySeconds = v),
+                  key: ValueKey(spec.recoveryByDistance),
+                  label: 'Recovery (0 = none)',
+                  suffix: spec.recoveryByDistance ? 'm' : 'sec',
+                  value: spec.recoveryByDistance
+                      ? spec.recoveryMeters
+                      : spec.recoverySeconds,
+                  onChanged: (v) => setState(() {
+                    if (spec.recoveryByDistance) {
+                      spec.recoveryMeters = v;
+                    } else {
+                      spec.recoverySeconds = v;
+                    }
+                  }),
                 ),
               ),
+              const SizedBox(width: 12),
+              SegmentedButton<bool>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: false, label: Text('sec')),
+                  ButtonSegment(value: true, label: Text('m')),
+                ],
+                selected: {spec.recoveryByDistance},
+                onSelectionChanged: (s) =>
+                    setState(() => spec.recoveryByDistance = s.first),
+              ),
             ],
+          ),
+          const SizedBox(height: 12),
+          _intensity(
+            label: 'Recovery intensity',
+            value: spec.recoveryIntensity,
+            onChanged: (i) => spec.recoveryIntensity = i,
           ),
         ],
       ),
@@ -435,19 +463,27 @@ class _WorkoutEditorState extends ConsumerState<_WorkoutEditor> {
     };
   }
 
-  Widget _intensity() => DropdownButtonFormField<Intensity>(
-    initialValue: spec.intensity,
+  Widget _intensity({
+    String label = 'Intensity',
+    Intensity? value,
+    void Function(Intensity)? onChanged,
+  }) => DropdownButtonFormField<Intensity>(
+    key: ValueKey(label),
+    initialValue: value ?? spec.intensity,
     isExpanded: true,
-    decoration: const InputDecoration(
-      labelText: 'Intensity',
-      border: OutlineInputBorder(),
+    decoration: InputDecoration(
+      labelText: label,
+      border: const OutlineInputBorder(),
       isDense: true,
     ),
     items: [
       for (final i in Intensity.values)
         DropdownMenuItem(value: i, child: Text(i.name)),
     ],
-    onChanged: (i) => setState(() => spec.intensity = i ?? spec.intensity),
+    onChanged: (i) => setState(() {
+      if (i == null) return;
+      onChanged != null ? onChanged(i) : spec.intensity = i;
+    }),
   );
 
   static String _testLabel(TestType t) => switch (t) {

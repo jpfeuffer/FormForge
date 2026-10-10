@@ -37,6 +37,8 @@ final class WorkoutSpec {
     SessionKind.threshold,
     SessionKind.interval,
     SessionKind.repetition,
+    SessionKind.marathonPace,
+    SessionKind.racePace,
     SessionKind.strength,
     SessionKind.combined,
     SessionKind.test,
@@ -53,7 +55,10 @@ final class WorkoutSpec {
 
   /// Metres when [byDistance], else minutes.
   int repSize = 400;
+  bool recoveryByDistance = false;
   int recoverySeconds = 90;
+  int recoveryMeters = 200;
+  Intensity recoveryIntensity = Intensity.recovery;
   TestType testType = TestType.timeTrial5k;
   final strength = StrengthSpec();
 
@@ -61,6 +66,8 @@ final class WorkoutSpec {
     SessionKind.threshold,
     SessionKind.interval,
     SessionKind.repetition,
+    SessionKind.marathonPace,
+    SessionKind.racePace,
   }.contains(kind);
 
   bool get isSteady => const {
@@ -83,6 +90,13 @@ final class WorkoutSpec {
         _quality(5, true, 800, 120, Intensity.interval);
       case SessionKind.repetition:
         _quality(8, true, 200, 90, Intensity.repetition);
+        recoveryByDistance = true;
+        recoveryMeters = 200;
+      case SessionKind.marathonPace:
+        _quality(2, false, 15, 180, Intensity.marathon);
+        recoveryIntensity = Intensity.easy;
+      case SessionKind.racePace:
+        _quality(4, true, 1000, 120, Intensity.racePace);
       case SessionKind.combined:
         runMinutes = 45;
         intensity = Intensity.easy;
@@ -103,6 +117,8 @@ final class WorkoutSpec {
     this.byDistance = byDistance;
     repSize = size;
     recoverySeconds = recovery;
+    recoveryByDistance = false;
+    recoveryIntensity = Intensity.recovery;
     intensity = i;
   }
 
@@ -111,7 +127,11 @@ final class WorkoutSpec {
     SessionKind.easy => 'Easy run',
     SessionKind.recovery => 'Recovery run',
     SessionKind.long => 'Long run',
-    SessionKind.threshold || SessionKind.interval || SessionKind.repetition =>
+    SessionKind.threshold ||
+    SessionKind.interval ||
+    SessionKind.repetition ||
+    SessionKind.marathonPace ||
+    SessionKind.racePace =>
       '$reps × ${byDistance ? '$repSize m' : '$repSize min'} ${intensity.name}',
     SessionKind.strength => 'Strength (${strength.style.name})',
     SessionKind.combined =>
@@ -155,7 +175,9 @@ final class WorkoutSpec {
         return SessionTemplates.test(testType, profile);
       case SessionKind.threshold ||
           SessionKind.interval ||
-          SessionKind.repetition:
+          SessionKind.repetition ||
+          SessionKind.marathonPace ||
+          SessionKind.racePace:
         return Workout(
           sport: Sport.run,
           title: autoTitle,
@@ -176,11 +198,13 @@ final class WorkoutSpec {
                       : TimeEnd(Duration(minutes: repSize)),
                   target: IntensityTarget(intensity),
                 ),
-                if (recoverySeconds > 0)
-                  timed(
-                    StepKind.recovery,
-                    Duration(seconds: recoverySeconds),
-                    Intensity.recovery,
+                if (recoveryByDistance ? recoveryMeters > 0 : recoverySeconds > 0)
+                  WorkoutStep(
+                    kind: StepKind.recovery,
+                    end: recoveryByDistance
+                        ? DistanceEnd(recoveryMeters.toDouble())
+                        : TimeEnd(Duration(seconds: recoverySeconds)),
+                    target: IntensityTarget(recoveryIntensity),
                   ),
               ],
             ),
@@ -229,13 +253,16 @@ final class WorkoutSpec {
         }
       case SessionKind.threshold ||
           SessionKind.interval ||
-          SessionKind.repetition:
+          SessionKind.repetition ||
+          SessionKind.marathonPace ||
+          SessionKind.racePace:
+        int minutes(Duration d) => (d.inSeconds / 60).round();
         var rest = steps;
         if (rest.firstOrNull case WorkoutStep(
           kind: StepKind.warmup,
           end: TimeEnd(:final duration),
         )) {
-          spec.warmupMinutes = duration.inMinutes;
+          spec.warmupMinutes = minutes(duration);
           rest = rest.sublist(1);
         } else {
           spec.warmupMinutes = 0;
@@ -244,7 +271,7 @@ final class WorkoutSpec {
           kind: StepKind.cooldown,
           end: TimeEnd(:final duration),
         )) {
-          spec.cooldownMinutes = duration.inMinutes;
+          spec.cooldownMinutes = minutes(duration);
           rest = rest.sublist(0, rest.length - 1);
         } else {
           spec.cooldownMinutes = 0;
@@ -264,25 +291,39 @@ final class WorkoutSpec {
                 spec
                   ..byDistance = true
                   ..repSize = meters.round();
-              case TimeEnd(:final duration):
+              case TimeEnd(:final duration)
+                  when duration.inSeconds % 60 == 0:
                 spec
                   ..byDistance = false
                   ..repSize = duration.inMinutes;
-              case LapButtonEnd():
+              case TimeEnd() || LapButtonEnd():
                 return null;
             }
-            spec.recoverySeconds = switch (elements.skip(1).toList()) {
-              [] => 0,
-              [
-                WorkoutStep(
-                  kind: StepKind.recovery,
-                  end: TimeEnd(:final duration),
-                ),
-              ] =>
-                duration.inSeconds,
-              _ => -1,
-            };
-            return spec.recoverySeconds < 0 ? null : spec;
+            switch (elements.skip(1).toList()) {
+              case []:
+                spec.recoverySeconds = 0;
+              case [
+                WorkoutStep(kind: StepKind.recovery, :final end, :final target),
+              ]:
+                if (target case IntensityTarget(:final intensity)) {
+                  spec.recoveryIntensity = intensity;
+                }
+                switch (end) {
+                  case TimeEnd(:final duration):
+                    spec
+                      ..recoveryByDistance = false
+                      ..recoverySeconds = duration.inSeconds;
+                  case DistanceEnd(:final meters):
+                    spec
+                      ..recoveryByDistance = true
+                      ..recoveryMeters = meters.round();
+                  case LapButtonEnd():
+                    return null;
+                }
+              default:
+                return null;
+            }
+            return spec;
           }
         }
       case SessionKind.strength:
