@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:training_core/training_core.dart';
 
 import '../../data/database.dart';
+import '../adaptation/match_widgets.dart';
 import 'calendar_models.dart';
 import 'calendar_providers.dart';
 import 'kind_style.dart';
@@ -76,6 +77,8 @@ class WorkoutCard extends ConsumerWidget {
                   ],
                 ),
                 Text(meta, style: text.bodySmall?.copyWith(color: cs.outline)),
+                if (entry.row.activityId case final id?)
+                  LinkedActivityBadge(activityId: id),
                 const SizedBox(height: 2),
                 Wrap(
                   spacing: 4,

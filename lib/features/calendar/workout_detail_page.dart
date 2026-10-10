@@ -6,6 +6,7 @@ import 'package:training_core/training_core.dart';
 
 import '../../data/database.dart';
 import '../../providers.dart';
+import '../adaptation/match_widgets.dart';
 import 'calendar_models.dart';
 import 'calendar_providers.dart';
 import 'kind_style.dart';
@@ -172,6 +173,7 @@ class _Body extends ConsumerWidget {
             _Stat('Load', w.estimatedLoad(profile).round().toString()),
           ],
         ),
+        LinkedActivityTile(planned: r),
         if (estimated)
           Padding(
             padding: const EdgeInsets.only(top: 12),

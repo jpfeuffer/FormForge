@@ -86,18 +86,25 @@ void main() {
     expect((await row(easy)).activityId, shortRun);
   });
 
-  test('a lone short jog still matches the only planned session', () async {
+  test('a lone short jog is only suggested; accepting links it', () async {
     final p = await addPlanned(db, date: today, workout: easyRun(40));
     final jog = await addActivity(
       db,
       start: DateTime(2026, 10, 10, 7),
       legs: [leg(1200, 3.1)],
     );
-    await matcher.matchAll();
+    expect(await matcher.matchAll(), 0);
+    expect((await row(p)).activityId, isNull);
+    final s = await db.select(db.matchSuggestions).getSingle();
+    expect((s.activityId, s.plannedId), (jog, p));
+
+    await matcher.acceptSuggestion(jog, p);
     final r = await row(p);
     expect(r.activityId, jog);
+    expect(r.linkSource, LinkSource.manual);
     expect(r.status, WorkoutStatus.partial);
     expect(complianceOf(r).verdict, SessionVerdict.incomplete);
+    expect(await db.select(db.matchSuggestions).get(), isEmpty);
   });
 
   test('ignores recordings under five minutes and other sports', () async {
@@ -147,7 +154,7 @@ void main() {
       final same = await addActivity(
         db,
         start: DateTime(2026, 10, 8, 7),
-        legs: [leg(1500, 3.1)],
+        legs: [leg(2400, 3.1)],
       );
       await matcher.matchAll();
       expect((await row(p)).activityId, same);
@@ -164,7 +171,7 @@ void main() {
       expect((await row(p)).activityId, isNull);
     });
 
-    test('sessions older than a week are not shifted', () async {
+    test('activities more than six days away never match', () async {
       final p = await addPlanned(
         db,
         date: DateTime(2026, 10, 1),
@@ -172,7 +179,7 @@ void main() {
       );
       await addActivity(
         db,
-        start: DateTime(2026, 10, 2, 7),
+        start: DateTime(2026, 10, 8, 7),
         legs: [leg(2400, 3.1)],
       );
       await matcher.matchAll();
@@ -192,7 +199,7 @@ void main() {
     expect(r.activityId, isNull);
   });
 
-  test('an activity is linked to one session only', () async {
+  test('identical sessions on one day are suggested, not guessed', () async {
     final a = await addPlanned(db, date: today, workout: easyRun(40));
     final b = await addPlanned(db, date: today, workout: easyRun(40));
     await addActivity(
@@ -200,9 +207,10 @@ void main() {
       start: DateTime(2026, 10, 10, 7),
       legs: [leg(2400, 3.1)],
     );
-    expect(await matcher.matchAll(), 1);
-    final linked = [(await row(a)).activityId, (await row(b)).activityId];
-    expect(linked.whereType<int>(), hasLength(1));
+    expect(await matcher.matchAll(), 0);
+    expect((await row(a)).activityId, isNull);
+    expect((await row(b)).activityId, isNull);
+    expect(await db.select(db.matchSuggestions).get(), hasLength(2));
   });
 
   test('strength sessions match strength activities only', () async {

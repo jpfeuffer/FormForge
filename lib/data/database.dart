@@ -12,6 +12,9 @@ enum FitnessSource { race, timeTrial, halfCooper, lthrTest, detected, manual }
 
 enum WorkoutStatus { planned, done, partial, skipped }
 
+/// How a planned workout got linked to its activity.
+enum LinkSource { auto, manual, garminWorkout }
+
 class AthleteProfiles extends Table {
   IntColumn get id => integer()();
   IntColumn get birthYear => integer().nullable()();
@@ -52,6 +55,19 @@ class Activities extends Table {
   RealColumn get maxHr => real().nullable()();
   RealColumn get avgSpeed => real().nullable()();
   TextColumn get fitPath => text().nullable()();
+
+  /// Name of the workout the watch executed (FIT `workout.wkt_name`).
+  TextColumn get workoutName => text().nullable()();
+
+  /// Garmin id of that workout, when the activity summary exposes one.
+  TextColumn get garminWorkoutId => text().nullable()();
+
+  /// The stored FIT file was inspected for a workout name.
+  BoolColumn get workoutChecked =>
+      boolean().withDefault(const Constant(false))();
+
+  /// The user confirmed this was not a planned workout.
+  BoolColumn get unplanned => boolean().withDefault(const Constant(false))();
 }
 
 /// Per-second streams of an activity, packed little-endian (see
@@ -127,9 +143,29 @@ class PlannedWorkouts extends Table {
   DateTimeColumn get garminSyncedAt => dateTime().nullable()();
   IntColumn get activityId => integer().nullable().references(Activities, #id)();
 
+  /// Null while unlinked.
+  TextColumn get linkSource => textEnum<LinkSource>().nullable()();
+  RealColumn get linkScore => real().nullable()();
+
   /// Evaluation of the matched activity against the plan (JSON).
   TextColumn get complianceJson => text().nullable()();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+/// Proposed links awaiting the user's decision; dismissed rows record
+/// rejections so the pair is not proposed again.
+class MatchSuggestions extends Table {
+  IntColumn get activityId =>
+      integer().references(Activities, #id, onDelete: KeyAction.cascade)();
+  IntColumn get plannedId => integer()
+      .references(PlannedWorkouts, #id, onDelete: KeyAction.cascade)();
+  RealColumn get score => real()();
+  TextColumn get reasonsJson => text().withDefault(const Constant('[]'))();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  BoolColumn get dismissed => boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {activityId, plannedId};
 }
 
 class TrainingPlans extends Table {
@@ -163,6 +199,7 @@ class KeyValues extends Table {
   Goals,
   TrainingPlans,
   PlannedWorkouts,
+  MatchSuggestions,
   KeyValues,
 ])
 class AppDatabase extends _$AppDatabase {
@@ -170,7 +207,7 @@ class AppDatabase extends _$AppDatabase {
       : super(executor ?? driftDatabase(name: 'formforge'));
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -194,6 +231,22 @@ class AppDatabase extends _$AppDatabase {
                 'AND fit_path IS NULL)',
               );
             }
+          }
+          if (from < 5) {
+            await m.addColumn(activities, activities.workoutName);
+            await m.addColumn(activities, activities.garminWorkoutId);
+            await m.addColumn(activities, activities.workoutChecked);
+            await m.addColumn(activities, activities.unplanned);
+            // Tables recreated for v3 above already have the columns.
+            if (from >= 3) {
+              await m.addColumn(plannedWorkouts, plannedWorkouts.linkSource);
+              await m.addColumn(plannedWorkouts, plannedWorkouts.linkScore);
+              await customStatement(
+                "UPDATE planned_workouts SET link_source = 'auto' "
+                'WHERE activity_id IS NOT NULL',
+              );
+            }
+            await m.createTable(matchSuggestions);
           }
         },
         beforeOpen: (details) async {

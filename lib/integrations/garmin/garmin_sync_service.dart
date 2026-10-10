@@ -260,6 +260,7 @@ class GarminSyncService {
           pauses: fit!.timerPauses,
         ),
         fitPath: file.path,
+        workoutName: fit.workoutName,
       );
       return true;
     }

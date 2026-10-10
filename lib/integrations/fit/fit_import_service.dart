@@ -144,6 +144,7 @@ class FitImportService {
           twin.id,
           streams: streams,
           fitPath: file.path,
+          workoutName: fit.workoutName,
         );
         if (!changed && twin.fitPath != file.path) await file.delete();
         return changed ? twin.id : null;
@@ -151,7 +152,13 @@ class FitImportService {
       return await _db.transaction(() async {
         final id = await _db
             .into(_db.activities)
-            .insert(activity.copyWith(fitPath: Value(file.path)));
+            .insert(
+              activity.copyWith(
+                fitPath: Value(file.path),
+                workoutName: Value(fit.workoutName),
+                workoutChecked: const Value(true),
+              ),
+            );
         if (streams != null) {
           await _db.into(_db.activityStreams).insert(streams.toCompanion(id));
         }

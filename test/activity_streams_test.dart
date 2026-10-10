@@ -11,6 +11,8 @@ void main() {
         setup: (raw) => raw
           ..execute('CREATE TABLE activities (id INTEGER PRIMARY KEY, '
               'source TEXT, fit_path TEXT)')
+          ..execute('CREATE TABLE planned_workouts (id INTEGER PRIMARY KEY, '
+              'activity_id INTEGER)')
           ..execute('CREATE TABLE activity_streams (activity_id INTEGER '
               'PRIMARY KEY, sample_count INTEGER NOT NULL, seconds BLOB NOT '
               'NULL, speed BLOB, heart_rate BLOB, distance BLOB, latitude '
@@ -91,13 +93,17 @@ void main() {
   test('schema v1 databases get new tables on upgrade', () async {
     final db = AppDatabase(
       NativeDatabase.memory(
-        setup: (raw) => raw.execute('PRAGMA user_version = 1'),
+        setup: (raw) => raw
+          ..execute('CREATE TABLE activities (id INTEGER PRIMARY KEY, '
+              'source TEXT, fit_path TEXT)')
+          ..execute('PRAGMA user_version = 1'),
       ),
     );
     addTearDown(db.close);
     expect(await db.select(db.activityStreams).get(), isEmpty);
     expect(await db.select(db.trainingPlans).get(), isEmpty);
     expect(await db.select(db.plannedWorkouts).get(), isEmpty);
-    expect(db.schemaVersion, 4);
+    expect(await db.select(db.matchSuggestions).get(), isEmpty);
+    expect(db.schemaVersion, 5);
   });
 }

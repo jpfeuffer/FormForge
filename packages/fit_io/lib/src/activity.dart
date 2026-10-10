@@ -149,13 +149,25 @@ class FitActivity {
         records =
             file.byNum(FitMesgNum.record).map(FitRecord.fromMessage).toList(),
         events =
-            file.byNum(FitMesgNum.event).map(FitEvent.fromMessage).toList();
+            file.byNum(FitMesgNum.event).map(FitEvent.fromMessage).toList(),
+        workoutName = _nonEmpty(file
+            .byNum(FitMesgNum.workout)
+            .map((m) => m.stringValue(FitWorkoutField.wktName))
+            .firstOrNull);
 
   final FitFileId? fileId;
   final List<FitSession> sessions;
   final List<FitLap> laps;
   final List<FitRecord> records;
   final List<FitEvent> events;
+
+  /// Name of the structured workout the device executed (`workout.wkt_name`).
+  final String? workoutName;
+
+  static String? _nonEmpty(String? s) {
+    final t = s?.trim();
+    return t == null || t.isEmpty ? null : t;
+  }
 
   bool get isActivity => fileId?.type == FitFileType.activity;
 

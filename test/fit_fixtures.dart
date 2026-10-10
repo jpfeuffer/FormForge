@@ -5,8 +5,13 @@ import 'package:fit_io/fit_io.dart';
 final runStart = DateTime.utc(2026, 9, 20, 6, 45);
 
 /// Synthetic steady run: 1 Hz records at 3 m/s; HR 140 then 147 in the
-/// second half (≈4.8 % decoupling).
-Uint8List syntheticRunFit({int serialNumber = 1234, int seconds = 1200}) {
+/// second half (≈4.8 % decoupling). [workoutName] adds the `workout` message
+/// a watch writes when the run was started from a structured workout.
+Uint8List syntheticRunFit({
+  int serialNumber = 1234,
+  int seconds = 1200,
+  String? workoutName,
+}) {
   final start = toFitDateTime(runStart);
   final w = FitWriter()
     ..write(FitMesgNum.fileId, [
@@ -23,6 +28,11 @@ Uint8List syntheticRunFit({int serialNumber = 1234, int seconds = 1200}) {
       FitField(FitFileIdField.serialNumber, FitBaseType.uint32z, serialNumber),
       FitField(FitFileIdField.timeCreated, FitBaseType.uint32, start),
     ]);
+  if (workoutName != null) {
+    w.write(FitMesgNum.workout, [
+      FitField(FitWorkoutField.wktName, FitBaseType.string, workoutName),
+    ]);
+  }
   for (var i = 0; i <= seconds; i++) {
     w.write(FitMesgNum.record, [
       FitField(FitCommonField.timestamp, FitBaseType.uint32, start + i),

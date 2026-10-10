@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:drift/native.dart';
 import 'package:fit_io/fit_io.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -92,6 +93,18 @@ void main() {
     expect(summary.failed[1].reason, startsWith('not a FIT file'));
     expect(await db.select(db.activities).get(), isEmpty);
     expect(dir.listSync(recursive: true).whereType<File>(), isEmpty);
+  });
+
+  test('stores the name of the workout the watch executed', () async {
+    await service.importAll([
+      (name: 'a.fit', bytes: syntheticRunFit(workoutName: '10 × 200 m [FF]')),
+      (name: 'b.fit', bytes: syntheticRunFit(serialNumber: 7)),
+    ]);
+    final rows = await (db.select(
+      db.activities,
+    )..orderBy([(t) => OrderingTerm.asc(t.id)])).get();
+    expect(rows.map((a) => a.workoutName), ['10 × 200 m [FF]', null]);
+    expect(rows.every((a) => a.workoutChecked), isTrue);
   });
 
   test('analysis uses profile zones and hrTSS', () async {

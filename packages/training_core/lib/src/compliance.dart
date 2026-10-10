@@ -1,7 +1,9 @@
 import 'dart:math';
 
 import 'evaluation.dart';
+import 'pauses.dart';
 import 'sample_series.dart';
+import 'segmentation.dart';
 import 'workout.dart';
 import 'zone.dart';
 
@@ -184,8 +186,9 @@ final class SessionCompliance {
       };
 }
 
-/// How executed segments were matched to workout steps.
-enum StepAlignment { laps, time }
+/// How executed segments were matched to workout steps: by recorded laps,
+/// by detected hard/easy effort blocks, or by planned durations in order.
+enum StepAlignment { laps, segments, time }
 
 abstract final class ComplianceEvaluator {
   /// A step counts as executed from this share of its planned size.
@@ -211,21 +214,34 @@ abstract final class ComplianceEvaluator {
 
   /// Aligns [samples] (and [laps], preferred when they match the step
   /// structure) to the run steps of [workout]; strength steps are ignored.
+  /// Without fitting laps, detected effort blocks are used when they match the
+  /// hard/easy structure of the plan but the planned durations drifted from
+  /// what was run (late start, longer warm-up).
   static SessionCompliance evaluate({
     required Workout workout,
     required PaceProfile profile,
     required List<Sample> samples,
     List<LapSegment> laps = const [],
+    List<Pause> pauses = const [],
   }) {
     final steps = [
       for (final s in workout.flatten())
         if (s.kind != StepKind.strength) s,
     ];
     final series = SampleSeries(samples);
-    final useLaps = _lapsFit(steps, laps, profile);
-    final segments = useLaps
-        ? _fromLaps(steps, laps, series)
-        : _fromTime(steps, series, profile);
+    var alignment = StepAlignment.laps;
+    List<_Segment?> segments;
+    if (_lapsFit(steps, laps, profile)) {
+      segments = _fromLaps(steps, laps, series);
+    } else {
+      alignment = StepAlignment.time;
+      segments = _fromTime(steps, series, profile);
+      final effort = _fromEffort(steps, samples, profile, pauses);
+      if (effort != null && _drifts(steps, segments, effort, profile)) {
+        alignment = StepAlignment.segments;
+        segments = effort;
+      }
+    }
 
     final results = <StepCompliance>[];
     final weights = <double>[];
@@ -240,14 +256,130 @@ abstract final class ComplianceEvaluator {
       results.add(result);
       weights.add(weight);
     }
-    return _summarize(
-      steps,
-      results,
-      weights,
-      samples,
-      profile,
-      useLaps ? StepAlignment.laps : StepAlignment.time,
-    );
+    return _summarize(steps, results, weights, samples, profile, alignment);
+  }
+
+  static bool _isHard(WorkoutStep step, PaceProfile profile) {
+    final v = step.effectiveSpeed(profile);
+    return v != null && profile.isHard(v);
+  }
+
+  /// Steps grouped by effort class; standing rests separate groups.
+  static List<({bool hard, List<int> steps})> _plannedBlocks(
+    List<WorkoutStep> steps,
+    PaceProfile profile,
+  ) {
+    final blocks = <({bool hard, List<int> steps})>[];
+    var open = false;
+    for (var i = 0; i < steps.length; i++) {
+      if (!steps[i].isMoving) {
+        open = false;
+        continue;
+      }
+      final hard = _isHard(steps[i], profile);
+      if (open && blocks.last.hard == hard) {
+        blocks.last.steps.add(i);
+      } else {
+        blocks.add((hard: hard, steps: [i]));
+      }
+      open = true;
+    }
+    return blocks;
+  }
+
+  /// Aligns step groups to detected effort blocks when both have the same
+  /// hard/easy sequence (a skipped warm-up or cool-down is tolerated).
+  static List<_Segment?>? _fromEffort(
+    List<WorkoutStep> steps,
+    List<Sample> samples,
+    PaceProfile profile,
+    List<Pause> pauses,
+  ) {
+    final efforts = EffortSegmenter.segment(samples, profile, pauses: pauses);
+    if (efforts.length < 2) return null;
+    final all = _plannedBlocks(steps, profile);
+    for (final (skipFirst, skipLast) in [
+      (false, false),
+      (true, false),
+      (false, true),
+      (true, true),
+    ]) {
+      var blocks = all;
+      if (skipFirst) {
+        if (blocks.isEmpty || blocks.first.hard) continue;
+        blocks = blocks.sublist(1);
+      }
+      if (skipLast) {
+        if (blocks.isEmpty || blocks.last.hard) continue;
+        blocks = blocks.sublist(0, blocks.length - 1);
+      }
+      if (blocks.length != efforts.length) continue;
+      var same = true;
+      for (var i = 0; i < blocks.length; i++) {
+        same &= blocks[i].hard == efforts[i].hard;
+      }
+      if (!same) continue;
+
+      final result = List<_Segment?>.filled(steps.length, null);
+      for (var b = 0; b < blocks.length; b++) {
+        final e = efforts[b];
+        final idx = blocks[b].steps;
+        final planned = [
+          for (final i in idx)
+            max(1, steps[i].estimatedDuration(profile).inSeconds),
+        ];
+        final total = planned.fold(0, (a, c) => a + c);
+        var cursor = 0;
+        for (var k = 0; k < idx.length; k++) {
+          final start = e.startSecond + e.durationS * cursor / total;
+          cursor += planned[k];
+          final end = e.startSecond + e.durationS * cursor / total;
+          final double coverage;
+          if (idx.length == 1 && steps[idx[k]].end is DistanceEnd) {
+            final meters = (steps[idx[k]].end as DistanceEnd).meters;
+            coverage = (e.distance ?? 0) / meters;
+          } else if (steps[idx[k]].end is LapButtonEnd) {
+            coverage = 1;
+          } else {
+            coverage = e.movingS / total;
+          }
+          result[idx[k]] = _Segment(start, end, min(1, coverage));
+        }
+      }
+      for (var i = 0; i < steps.length; i++) {
+        if (steps[i].isMoving) continue;
+        final before = result.sublist(0, i).whereType<_Segment>().lastOrNull;
+        final after = result.sublist(i + 1).whereType<_Segment>().firstOrNull;
+        if (before == null || after == null || after.start <= before.end) {
+          continue;
+        }
+        result[i] = _Segment(before.end, after.start, 1);
+      }
+      return result;
+    }
+    return null;
+  }
+
+  /// Whether hard steps start or end clearly away from where the planned
+  /// durations put them but where the detected effort did.
+  static bool _drifts(
+    List<WorkoutStep> steps,
+    List<_Segment?> time,
+    List<_Segment?> effort,
+    PaceProfile profile,
+  ) {
+    for (var i = 0; i < steps.length; i++) {
+      if (!_isHard(steps[i], profile)) continue;
+      final t = time[i], e = effort[i];
+      if (e == null) continue;
+      if (t == null) return true;
+      final tolerance = max(20.0, 0.2 * (e.end - e.start));
+      if ((t.start - e.start).abs() > tolerance ||
+          (t.end - e.end).abs() > tolerance) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static bool _lapsFit(
