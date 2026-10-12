@@ -595,10 +595,11 @@ class _ChartCardState extends State<_ChartCard> {
                       ),
                     ),
                     lineTouchData: LineTouchData(
-                      // Only the recorded line is touchable, not the target bars.
+                      // Only the recorded line is touchable, not the target
+                      // bars; fl_chart needs one entry per touched spot.
                       getTouchedSpotIndicator: (bar, indexes) =>
                           bar.dashArray != null
-                          ? const []
+                          ? [for (final _ in indexes) null]
                           : defaultTouchedIndicators(bar, indexes),
                       touchTooltipData: LineTouchTooltipData(
                         getTooltipItems: (touched) => [
