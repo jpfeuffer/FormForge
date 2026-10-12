@@ -93,4 +93,34 @@ abstract final class EvalInfo {
   static const targetBand =
       'The planned target range of this step, drawn only while the step was '
       'planned.';
+
+  static const fitness =
+      'Fitness (CTL, chronic training load): your training stress averaged '
+      'over roughly the last 6 weeks. It builds slowly with consistent '
+      'training and fades slowly when you stop. Higher means you are more '
+      'conditioned.';
+
+  static const fatigue =
+      'Fatigue (ATL, acute training load): your training stress averaged '
+      'over roughly the last week. It jumps after hard days and drops fast '
+      'with rest.';
+
+  static String form(double tsb) {
+    final state = switch (tsb) {
+      > 15 => 'Very fresh: well rested, good for a race, but fitness may be '
+          'fading if it stays here.',
+      > 0 => 'Fresh and ready for a hard session or race.',
+      > -10 => 'Neutral: balanced training.',
+      > -30 => 'Productive: normal fatigue of a solid training block.',
+      _ => 'Heavily fatigued: high risk of overload, consider recovery.',
+    };
+    return 'Form (TSB, training stress balance) = fitness − fatigue. '
+        'Positive means rested, negative means carrying fatigue.\n'
+        'Now: $state';
+  }
+
+  static const acwr =
+      'Acute:chronic workload ratio = fatigue ÷ fitness. 0.8–1.3 is the '
+      'sweet spot; above 1.5 your load jumped faster than your body is used '
+      'to, which raises injury risk.';
 }

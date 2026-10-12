@@ -1,8 +1,11 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:training_core/training_core.dart';
 
 import '../adaptation/adaptation_providers.dart';
+import '../adaptation/eval_info.dart';
 
 class LoadCard extends ConsumerWidget {
   const LoadCard({super.key});
@@ -19,6 +22,13 @@ class LoadCard extends ConsumerWidget {
     final all = ref.watch(trainingLoadProvider).value ?? const [];
     final points = all.length > _days ? all.sublist(all.length - _days) : all;
     final last = points.lastOrNull;
+    final form = last == null ? 0.0 : last.ctl - last.atl;
+    final formColor = switch (form) {
+      > 15 => Colors.amber,
+      > -10 => Colors.green,
+      > -30 => Colors.teal,
+      _ => theme.colorScheme.error,
+    };
 
     return Card(
       child: Padding(
@@ -32,31 +42,89 @@ class LoadCard extends ConsumerWidget {
               const Text('Not enough activities yet.')
             else ...[
               Wrap(
-                spacing: 16,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  Text('Fitness (CTL) ${last.ctl.round()}'),
-                  Text('Fatigue (ATL) ${last.atl.round()}'),
-                  Text('Form (TSB) ${(last.ctl - last.atl).round()}'),
+                  _MetricBox(
+                    label: 'Fitness',
+                    abbreviation: 'CTL',
+                    value: '${last.ctl.round()}',
+                    color: fitness,
+                    info: EvalInfo.fitness,
+                  ),
+                  _MetricBox(
+                    label: 'Fatigue',
+                    abbreviation: 'ATL',
+                    value: '${last.atl.round()}',
+                    color: fatigue,
+                    info: EvalInfo.fatigue,
+                  ),
+                  _MetricBox(
+                    label: 'Form',
+                    abbreviation: 'TSB',
+                    value: '${form > 0 ? '+' : ''}${form.round()}',
+                    color: formColor,
+                    info: EvalInfo.form(form),
+                  ),
                   if (last.acwr != null && last.ctl >= 15)
-                    Text('ACWR ${last.acwr!.toStringAsFixed(2)}'),
+                    _MetricBox(
+                      label: 'ACWR',
+                      value: last.acwr!.toStringAsFixed(2),
+                      color: theme.colorScheme.outline,
+                      info: EvalInfo.acwr,
+                    ),
                 ],
               ),
               SizedBox(
-                height: 100,
+                height: 120,
                 child: LineChart(
                   LineChartData(
                     minY: 0,
+                    // x is days from today (0), so weekly ticks end on today.
+                    minX: -(points.length - 1).toDouble(),
+                    maxX: 0,
                     lineBarsData: [
-                      _line([
-                        for (final p in points) p.ctl,
-                      ], fitness),
-                      _line([
-                        for (final p in points) p.atl,
-                      ], fatigue),
+                      _line(points, (p) => p.ctl, fitness),
+                      _line(points, (p) => p.atl, fatigue),
                     ],
-                    gridData: const FlGridData(show: false),
+                    gridData: FlGridData(
+                      drawHorizontalLine: false,
+                      verticalInterval: 7,
+                      getDrawingVerticalLine: (_) => FlLine(
+                        color: theme.colorScheme.outlineVariant,
+                        strokeWidth: 0.5,
+                      ),
+                    ),
                     borderData: FlBorderData(show: false),
-                    titlesData: const FlTitlesData(show: false),
+                    titlesData: FlTitlesData(
+                      leftTitles: const AxisTitles(),
+                      rightTitles: const AxisTitles(),
+                      topTitles: const AxisTitles(),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          interval: 7,
+                          reservedSize: 22,
+                          getTitlesWidget: (x, meta) {
+                            final i = points.length - 1 + x.round();
+                            if (i < 0 || i >= points.length) {
+                              return const SizedBox.shrink();
+                            }
+                            return SideTitleWidget(
+                              meta: meta,
+                              space: 6,
+                              fitInside: SideTitleFitInsideData.fromTitleMeta(
+                                meta,
+                              ),
+                              child: Text(
+                                DateFormat('d MMM').format(points[i].day),
+                                style: theme.textTheme.labelSmall,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                     lineTouchData: const LineTouchData(enabled: false),
                   ),
                 ),
@@ -78,12 +146,68 @@ class LoadCard extends ConsumerWidget {
     );
   }
 
-  LineChartBarData _line(List<double> values, Color color) => LineChartBarData(
+  LineChartBarData _line(
+    List<LoadPoint> points,
+    double Function(LoadPoint) value,
+    Color color,
+  ) => LineChartBarData(
     spots: [
-      for (var i = 0; i < values.length; i++) FlSpot(i.toDouble(), values[i]),
+      for (var i = 0; i < points.length; i++)
+        FlSpot((i - (points.length - 1)).toDouble(), value(points[i])),
     ],
     color: color,
     barWidth: 2,
     dotData: const FlDotData(show: false),
   );
+}
+
+/// Button-like value box with a colour accent; hover or tap explains it.
+class _MetricBox extends StatelessWidget {
+  const _MetricBox({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.info,
+    this.abbreviation,
+  });
+
+  final String label;
+  final String? abbreviation;
+  final String value;
+  final Color color;
+  final String info;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Info(
+      info,
+      child: Material(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {},
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border(left: BorderSide(color: color, width: 4)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  abbreviation == null ? label : '$label · $abbreviation',
+                  style: theme.textTheme.labelSmall,
+                ),
+                Text(value, style: theme.textTheme.titleLarge),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
