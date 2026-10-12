@@ -16,11 +16,15 @@ class ActivityCharts extends StatefulWidget {
     required this.streams,
     required this.paces,
     required this.hrZones,
+    this.plannedSteps = const [],
   });
 
   final ActivityStreamData streams;
   final PaceProfile? paces;
   final List<Zone> hrZones;
+
+  /// Steps of the linked planned workout; their targets are drawn as bars.
+  final List<StepCompliance> plannedSteps;
 
   @override
   State<ActivityCharts> createState() => _ActivityChartsState();
@@ -80,17 +84,34 @@ class _ActivityChartsState extends State<ActivityCharts> {
         ? (_selStart!, _selEnd!)
         : null;
 
+    // Step times are moving time; the axis is wall-clock minutes.
+    List<_TargetBar> targets(
+      Zone? Function(StepCompliance) zone,
+      (double, double) Function(Zone) toY,
+    ) => [
+      for (final s in widget.plannedSteps)
+        if (zone(s) case final z? when s.startSecond != null && s.endSecond != null)
+          _TargetBar(
+            _wallSeconds(s.startSecond!, pauses, end: false) / 60,
+            _wallSeconds(s.endSecond!, pauses, end: true) / 60,
+            toY(z).$1,
+            toY(z).$2,
+          ),
+    ];
+
     Widget card(
       String title,
       List<FlSpot> spots,
       String Function(double) label,
       List<_Band> bands,
+      List<_TargetBar> targets,
     ) => _ChartCard(
       title: title,
       spots: spots,
       color: theme.colorScheme.onSurface,
       label: label,
       bands: bands,
+      targets: targets,
       pauses: pauses,
       minX: minX,
       maxX: maxX,
@@ -127,6 +148,7 @@ class _ActivityChartsState extends State<ActivityCharts> {
             pace,
             (y) => Pace.format(1000 / -y),
             _bands(paceZones, (z) => (paceY(z.lower), paceY(z.upper))),
+            targets((s) => s.speedTarget, (z) => (paceY(z.lower), paceY(z.upper))),
           ),
         if (hr.any((s) => !s.y.isNaN))
           card(
@@ -134,6 +156,7 @@ class _ActivityChartsState extends State<ActivityCharts> {
             hr,
             (y) => y.round().toString(),
             _bands(widget.hrZones, (z) => (z.lower, z.upper)),
+            targets((s) => s.hrTarget, (z) => (z.lower, z.upper)),
           ),
       ],
     );
@@ -245,6 +268,31 @@ class _Band {
   final String label;
 }
 
+/// A planned target range of one step, on the chart's axes (x in minutes).
+class _TargetBar {
+  const _TargetBar(this.x1, this.x2, this.y1, this.y2);
+  final double x1;
+  final double x2;
+  final double y1;
+  final double y2;
+}
+
+/// Wall-clock seconds for [moving] seconds (paused intervals added back).
+/// At a pause boundary a step start moves after it and a step end before it.
+double _wallSeconds(double moving, List<Pause> pauses, {required bool end}) {
+  var cut = 0;
+  for (final p in pauses) {
+    if (p.kind != PauseKind.paused) continue;
+    final at = p.start - cut;
+    if (end ? moving > at : moving >= at) {
+      cut += p.seconds;
+    } else {
+      break;
+    }
+  }
+  return moving + cut;
+}
+
 const _zonePalette = [
   Colors.blue,
   Colors.teal,
@@ -332,6 +380,7 @@ class _ChartCard extends StatefulWidget {
     required this.color,
     required this.label,
     required this.bands,
+    required this.targets,
     required this.pauses,
     required this.minX,
     required this.maxX,
@@ -346,6 +395,7 @@ class _ChartCard extends StatefulWidget {
   final Color color;
   final String Function(double y) label;
   final List<_Band> bands;
+  final List<_TargetBar> targets;
   final List<Pause> pauses;
   final double minX;
   final double maxX;
@@ -371,7 +421,12 @@ class _ChartCardState extends State<_ChartCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final small = theme.textTheme.labelSmall;
-    final ys = widget.spots.map((s) => s.y).where((y) => !y.isNaN);
+    final ys = [
+      ...widget.spots.map((s) => s.y).where((y) => !y.isNaN),
+      // Targets of steps in view stay visible even when missed by a lot.
+      for (final t in widget.targets)
+        if (t.x2 > widget.minX && t.x1 < widget.maxX) ...[t.y1, t.y2],
+    ];
     final lo = ys.reduce(math.min), hi = ys.reduce(math.max);
     final pad = math.max((hi - lo) * 0.05, 1.0);
     final minY = lo - pad, maxY = hi + pad;
@@ -379,6 +434,42 @@ class _ChartCardState extends State<_ChartCard> {
       for (final b in widget.bands)
         if (math.max(b.y1, b.y2) > minY && math.min(b.y1, b.y2) < maxY) b,
     ];
+    final inView = [
+      for (final t in widget.targets)
+        if (t.x2 > widget.minX && t.x1 < widget.maxX) t,
+    ];
+    final targetColor = theme.colorScheme.primary;
+    final bars = <LineChartBarData>[
+      LineChartBarData(
+        spots: widget.spots,
+        color: widget.color,
+        barWidth: 1.5,
+        dotData: const FlDotData(show: false),
+      ),
+    ];
+    final fills = <BetweenBarsData>[];
+    for (final t in inView) {
+      final from = bars.length;
+      for (final y in [t.y1, t.y2]) {
+        bars.add(
+          LineChartBarData(
+            spots: [FlSpot(t.x1, y), FlSpot(t.x2, y)],
+            color: targetColor.withValues(alpha: 0.9),
+            barWidth: 1.5,
+            dashArray: const [6, 4],
+            dotData: const FlDotData(show: false),
+          ),
+        );
+      }
+      fills.add(
+        BetweenBarsData(
+          fromIndex: from,
+          toIndex: from + 1,
+          // Stronger than the 0.18 of the zone bands.
+          color: targetColor.withValues(alpha: 0.3),
+        ),
+      );
+    }
     final shown = [
       for (final p in widget.pauses)
         if (p.end / 60 > widget.minX && p.start / 60 < widget.maxX) p,
@@ -466,14 +557,8 @@ class _ChartCardState extends State<_ChartCard> {
                           ),
                       ],
                     ),
-                    lineBarsData: [
-                      LineChartBarData(
-                        spots: widget.spots,
-                        color: widget.color,
-                        barWidth: 1.5,
-                        dotData: const FlDotData(show: false),
-                      ),
-                    ],
+                    lineBarsData: bars,
+                    betweenBarsData: fills,
                     gridData: const FlGridData(drawVerticalLine: false),
                     borderData: FlBorderData(show: false),
                     titlesData: FlTitlesData(
@@ -510,13 +595,20 @@ class _ChartCardState extends State<_ChartCard> {
                       ),
                     ),
                     lineTouchData: LineTouchData(
+                      // Only the recorded line is touchable, not the target bars.
+                      getTouchedSpotIndicator: (bar, indexes) =>
+                          bar.dashArray != null
+                          ? const []
+                          : defaultTouchedIndicators(bar, indexes),
                       touchTooltipData: LineTouchTooltipData(
                         getTooltipItems: (touched) => [
                           for (final t in touched)
-                            LineTooltipItem(
-                              '${widget.label(t.y)} @ ${formatDuration(Duration(seconds: (t.x * 60).round()))}',
-                              const TextStyle(color: Colors.white),
-                            ),
+                            t.barIndex != 0
+                                ? null
+                                : LineTooltipItem(
+                                    '${widget.label(t.y)} @ ${formatDuration(Duration(seconds: (t.x * 60).round()))}',
+                                    const TextStyle(color: Colors.white),
+                                  ),
                         ],
                       ),
                     ),
@@ -525,7 +617,7 @@ class _ChartCardState extends State<_ChartCard> {
               ),
             ),
           ),
-          if (visible.isNotEmpty || shown.isNotEmpty) ...[
+          if (visible.isNotEmpty || shown.isNotEmpty || inView.isNotEmpty) ...[
             const SizedBox(height: 6),
             Wrap(
               spacing: 12,
@@ -533,6 +625,7 @@ class _ChartCardState extends State<_ChartCard> {
               children: [
                 for (final (color, label) in [
                   for (final b in visible) (b.color, b.label),
+                  if (inView.isNotEmpty) (targetColor, 'planned target'),
                   if (shown.any((p) => p.kind == PauseKind.paused))
                     (pausedColor, 'paused'),
                   if (shown.any((p) => p.kind == PauseKind.stopped))

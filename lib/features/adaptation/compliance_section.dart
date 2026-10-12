@@ -6,6 +6,7 @@ import '../../data/database.dart';
 import '../../providers.dart';
 import '../../util/format.dart';
 import 'adaptation_providers.dart';
+import 'eval_info.dart';
 import 'verdict_style.dart';
 
 final plannedForActivityProvider = StreamProvider.family<PlannedWorkout?, int>((
@@ -44,24 +45,38 @@ class ComplianceSection extends ConsumerWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              Chip(
-                label: Text(compliance.verdict.label),
-                avatar: Icon(
-                  Icons.flag,
-                  color: compliance.verdict.color(theme.colorScheme),
+              Info(
+                EvalInfo.session(compliance.verdict),
+                child: Chip(
+                  label: Text(compliance.verdict.label),
+                  avatar: Icon(
+                    Icons.flag,
+                    color: compliance.verdict.color(theme.colorScheme),
+                  ),
                 ),
               ),
-              Chip(label: Text('Completed ${percent(compliance.completion)}')),
+              Info(
+                EvalInfo.completed,
+                child: Chip(
+                  label: Text('Completed ${percent(compliance.completion)}'),
+                ),
+              ),
               if (compliance.paceCompliance != null)
-                Chip(
-                  label: Text(
-                    'Pace in target ${percent(compliance.paceCompliance!)}',
+                Info(
+                  EvalInfo.paceInTarget,
+                  child: Chip(
+                    label: Text(
+                      'Pace in target ${percent(compliance.paceCompliance!)}',
+                    ),
                   ),
                 ),
               if (compliance.hrCompliance != null)
-                Chip(
-                  label: Text(
-                    'HR in target ${percent(compliance.hrCompliance!)}',
+                Info(
+                  EvalInfo.hrInTarget,
+                  child: Chip(
+                    label: Text(
+                      'HR in target ${percent(compliance.hrCompliance!)}',
+                    ),
                   ),
                 ),
             ],
@@ -103,7 +118,10 @@ class _StepRow extends StatelessWidget {
     return ListTile(
       dense: true,
       contentPadding: EdgeInsets.zero,
-      leading: Icon(v.icon, color: v.color(theme.colorScheme)),
+      leading: Info(
+        EvalInfo.step(v),
+        child: Icon(v.icon, color: v.color(theme.colorScheme)),
+      ),
       title: Text(
         [
           '${step.index + 1}. ${step.kind.name}',
@@ -119,7 +137,10 @@ class _StepRow extends StatelessWidget {
             'Executed ${percent(step.coverage)}',
         ].join('\n'),
       ),
-      trailing: Text(v.label, style: theme.textTheme.labelMedium),
+      trailing: Info(
+        EvalInfo.step(v),
+        child: Text(v.label, style: theme.textTheme.labelMedium),
+      ),
     );
   }
 }

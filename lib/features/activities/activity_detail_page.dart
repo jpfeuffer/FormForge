@@ -6,7 +6,9 @@ import 'package:training_core/training_core.dart';
 import '../../data/database.dart';
 import '../../providers.dart';
 import '../../util/format.dart';
+import '../adaptation/adaptation_providers.dart';
 import '../adaptation/compliance_section.dart';
+import '../adaptation/eval_info.dart';
 import '../adaptation/match_widgets.dart';
 import 'activity_analysis.dart';
 import 'activity_charts.dart';
@@ -43,6 +45,9 @@ class _Details extends ConsumerWidget {
     final a = activity;
     final analysis = ref.watch(activityAnalysisProvider(a.id)).value;
     final streams = ref.watch(activityStreamProvider(a.id)).value;
+    final planned = ref.watch(plannedForActivityProvider(a.id)).value;
+    final plannedSteps =
+        (planned == null ? null : parseCompliance(planned))?.steps ?? const [];
     final theme = Theme.of(context);
 
     return ListView(
@@ -58,23 +63,40 @@ class _Details extends ConsumerWidget {
           runSpacing: 8,
           children: [
             if (a.distanceM != null) _Stat('Distance', formatKm(a.distanceM!)),
-            _Stat('Duration', formatDuration(Duration(seconds: a.durationS))),
+            _Stat(
+              'Duration',
+              formatDuration(Duration(seconds: a.durationS)),
+              info: 'Time with the watch timer running; paused time is not '
+                  'included.',
+            ),
             if (a.avgSpeed != null && a.avgSpeed! > 0)
-              _Stat('Pace', '${Pace.format(a.avgSpeed!)} /km'),
-            if (a.avgHr != null) _Stat('Avg HR', '${a.avgHr!.round()} bpm'),
-            if (a.maxHr != null) _Stat('Max HR', '${a.maxHr!.round()} bpm'),
+              _Stat(
+                'Pace',
+                '${Pace.format(a.avgSpeed!)} /km',
+                info: EvalInfo.pace,
+              ),
+            if (a.avgHr != null)
+              _Stat('Avg HR', '${a.avgHr!.round()} bpm', info: EvalInfo.avgHr),
+            if (a.maxHr != null)
+              _Stat('Max HR', '${a.maxHr!.round()} bpm', info: EvalInfo.maxHr),
             if (analysis?.efficiencyFactor != null)
               _Stat(
                 'Efficiency factor',
                 analysis!.efficiencyFactor!.toStringAsFixed(2),
+                info: EvalInfo.efficiency,
               ),
             if (analysis?.decoupling != null)
               _Stat(
                 'Decoupling (Pa:HR)',
                 '${analysis!.decoupling!.toStringAsFixed(1)} %',
+                info: EvalInfo.decoupling,
               ),
             if (analysis?.hrTss != null)
-              _Stat('hrTSS', analysis!.hrTss!.round().toString()),
+              _Stat(
+                'hrTSS',
+                analysis!.hrTss!.round().toString(),
+                info: EvalInfo.hrTss,
+              ),
           ],
         ),
         PlannedLinkSection(activityId: a.id),
@@ -95,6 +117,7 @@ class _Details extends ConsumerWidget {
             hrZones: [
               for (final z in analysis?.hrZones ?? const <ZoneTime>[]) z.zone,
             ],
+            plannedSteps: plannedSteps,
           ),
         if (streams == null)
           const Padding(
@@ -107,15 +130,16 @@ class _Details extends ConsumerWidget {
 }
 
 class _Stat extends StatelessWidget {
-  const _Stat(this.label, this.value);
+  const _Stat(this.label, this.value, {this.info});
 
   final String label;
   final String value;
+  final String? info;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card.filled(
+    final tile = Card.filled(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -129,6 +153,7 @@ class _Stat extends StatelessWidget {
         ),
       ),
     );
+    return info == null ? tile : Info(info!, child: tile);
   }
 }
 
@@ -140,26 +165,30 @@ class _ZoneBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final z = time.zone;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 200,
-            child: Text(
-              '${z.name} (${z.lower.round()}–${z.upper.round()})',
-              overflow: TextOverflow.ellipsis,
+    return Info(
+      'Share of the recorded time with your heart rate in this zone '
+      '(${z.lower.round()}–${z.upper.round()} bpm).',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 200,
+              child: Text(
+                '${z.name} (${z.lower.round()}–${z.upper.round()})',
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-          Expanded(child: LinearProgressIndicator(value: time.fraction)),
-          SizedBox(
-            width: 48,
-            child: Text(
-              '${(time.fraction * 100).round()} %',
-              textAlign: TextAlign.end,
+            Expanded(child: LinearProgressIndicator(value: time.fraction)),
+            SizedBox(
+              width: 48,
+              child: Text(
+                '${(time.fraction * 100).round()} %',
+                textAlign: TextAlign.end,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
