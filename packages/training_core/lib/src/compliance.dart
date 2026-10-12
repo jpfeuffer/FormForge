@@ -124,8 +124,9 @@ final class SessionCompliance {
   });
 
   factory SessionCompliance.fromJson(Map<String, Object?> json) {
-    if (json['v'] != version) {
-      throw FormatException('Unsupported compliance version', json['v']);
+    final v = json['v'];
+    if (v is! int || v < 1 || v > version) {
+      throw FormatException('Unsupported compliance version', v);
     }
     return SessionCompliance(
       steps: [
@@ -143,7 +144,8 @@ final class SessionCompliance {
     );
   }
 
-  static const version = 1;
+  /// 2: step times are moving time (v1 used wall-clock time).
+  static const version = 2;
 
   final List<StepCompliance> steps;
 
@@ -217,6 +219,8 @@ abstract final class ComplianceEvaluator {
   /// Without fitting laps, detected effort blocks are used when they match the
   /// hard/easy structure of the plan but the planned durations drifted from
   /// what was run (late start, longer warm-up).
+  /// Time bases: results are in moving time, i.e. with watch-paused intervals
+  /// cut out, so a break does not stretch steps or lower average speeds.
   static SessionCompliance evaluate({
     required Workout workout,
     required PaceProfile profile,
@@ -228,6 +232,10 @@ abstract final class ComplianceEvaluator {
       for (final s in workout.flatten())
         if (s.kind != StepKind.strength) s,
     ];
+    final moving = _MovingTime(pauses);
+    samples = moving.samples(samples);
+    laps = moving.laps(laps);
+    pauses = moving.standing(pauses);
     final series = SampleSeries(samples);
     var alignment = StepAlignment.laps;
     List<_Segment?> segments;
@@ -726,6 +734,61 @@ final class _Segment {
   /// Lap-reported fallbacks for when no samples cover the segment.
   final double? speed;
   final double? hr;
+}
+
+/// Maps wall-clock seconds to moving time by cutting watch-paused intervals.
+final class _MovingTime {
+  _MovingTime(List<Pause> pauses)
+      : _cuts = [
+          for (final p in pauses)
+            if (p.kind == PauseKind.paused && p.seconds > 0) p,
+        ]..sort((a, b) => a.start.compareTo(b.start));
+
+  final List<Pause> _cuts;
+
+  int at(int second) {
+    var cut = 0;
+    for (final p in _cuts) {
+      if (second >= p.end) {
+        cut += p.seconds;
+      } else if (second > p.start) {
+        cut += second - p.start;
+      }
+    }
+    return second - cut;
+  }
+
+  List<Sample> samples(List<Sample> list) => _cuts.isEmpty
+      ? list
+      : [
+          for (final s in list)
+            Sample(
+              second: at(s.second),
+              speed: s.speed,
+              hr: s.hr,
+              distance: s.distance,
+            ),
+        ];
+
+  List<LapSegment> laps(List<LapSegment> list) => _cuts.isEmpty
+      ? list
+      : [
+          for (final l in list)
+            LapSegment(
+              startSecond: at(l.startSecond),
+              durationS: at(l.startSecond + l.durationS) - at(l.startSecond),
+              distanceM: l.distanceM,
+              avgHr: l.avgHr,
+            ),
+        ];
+
+  /// Pauses that stay (standing still), moved to moving time.
+  List<Pause> standing(List<Pause> pauses) => _cuts.isEmpty
+      ? pauses
+      : [
+          for (final p in pauses)
+            if (p.kind != PauseKind.paused) Pause(at(p.start), at(p.end), p.kind),
+        ];
 }
 
 Map<String, Object?> _zoneJson(Zone z) => {

@@ -78,6 +78,20 @@ void main() {
     expect(r.linkScore, greaterThan(0.9));
   });
 
+  test('results stored before moving-time evaluation are recomputed', () async {
+    final p = await addPlanned(db, date: today, workout: easy(40));
+    await run(DateTime(2026, 10, 10, 7), 2400);
+    await matcher.matchAll();
+    await (db.update(db.plannedWorkouts)..where((t) => t.id.equals(p))).write(
+      const PlannedWorkoutsCompanion(
+        complianceJson: Value('{"v":1,"verdict":"tooEasy","steps":[]}'),
+      ),
+    );
+
+    await matcher.matchAll();
+    expect((await row(p)).complianceJson, contains('"v":2'));
+  });
+
   test('swapped days are linked crosswise', () async {
     final wedEasy = await addPlanned(
       db,

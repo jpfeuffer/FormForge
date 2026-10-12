@@ -513,11 +513,15 @@ class MatchingService {
     PaceProfile? profile,
     PaceProfile sizing,
   ) async {
+    // Results before compliance v2 used wall-clock time, so pauses skewed them.
     final rows =
         await (_db.select(_db.plannedWorkouts)..where(
               (t) =>
                   t.activityId.isNotNull() &
-                  t.complianceJson.isNull() &
+                  (t.complianceJson.isNull() |
+                      t.complianceJson
+                          .like('%"v":${SessionCompliance.version}%')
+                          .not()) &
                   t.kind.equalsValue(SessionKind.strength).not() &
                   t.date.isBiggerOrEqualValue(from),
             ))

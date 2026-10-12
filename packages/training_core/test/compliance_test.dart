@@ -97,6 +97,84 @@ void main() {
           closeTo(easy / profile.speedFor(Intensity.easy).mid, 1e-3));
     });
 
+    test('a long pause does not stretch the step or lower the pace', () {
+      // 20 min run, 20 min paused (no samples), 20 min run.
+      final s = synth([part(1200, easy, 140), part(1200, easy, 140)]);
+      final withBreak = [
+        for (final x in s)
+          Sample(
+            second: x.second > 1200 ? x.second + 1200 : x.second,
+            speed: x.speed,
+            hr: x.hr,
+            distance: x.distance,
+          ),
+      ];
+      final c = ComplianceEvaluator.evaluate(
+        workout: easyRun(40),
+        profile: profile,
+        samples: withBreak,
+        pauses: const [Pause(1200, 2400, PauseKind.paused)],
+      );
+      expect(c.verdict, SessionVerdict.onTarget);
+      expect(c.completion, closeTo(1, 1e-9));
+      expect(c.steps.single.avgSpeed, closeTo(easy, 0.02));
+      expect(c.steps.single.endSecond, closeTo(2400, 1));
+
+      // Without the pause info the break reads as slow running.
+      final naive = ComplianceEvaluator.evaluate(
+        workout: easyRun(40),
+        profile: profile,
+        samples: withBreak,
+      );
+      expect(naive.steps.single.avgSpeed, lessThan(easy * 0.8));
+    });
+
+    test('a pause between steps keeps the alignment', () {
+      final parts = [part(600, easy, 135), part(180, interval, 172)];
+      final s = synth(parts);
+      final shifted = [
+        for (final x in s)
+          Sample(
+            second: x.second > 600 ? x.second + 900 : x.second,
+            speed: x.speed,
+            hr: x.hr,
+            distance: x.distance,
+          ),
+      ];
+      final wk = Workout(sport: Sport.run, title: 'x', elements: const [
+        WorkoutStep(
+          kind: StepKind.warmup,
+          end: TimeEnd(Duration(minutes: 10)),
+          target: IntensityTarget(Intensity.easy),
+        ),
+        WorkoutStep(
+          kind: StepKind.active,
+          end: TimeEnd(Duration(minutes: 3)),
+          target: IntensityTarget(Intensity.interval),
+        ),
+        WorkoutStep(
+          kind: StepKind.cooldown,
+          end: TimeEnd(Duration(minutes: 1)),
+          target: IntensityTarget(Intensity.easy),
+        ),
+      ]);
+      final c = ComplianceEvaluator.evaluate(
+        workout: wk,
+        profile: profile,
+        samples: shifted,
+        pauses: const [Pause(600, 1500, PauseKind.paused)],
+      );
+      expect(c.steps[1].avgSpeed, closeTo(interval, 0.05));
+      expect(c.steps[1].verdict, StepVerdict.onTarget);
+    });
+
+    test('older v1 results can still be read', () {
+      final v1 = jsonDecode(
+        '{"v":1,"verdict":"onTarget","alignment":"time","completion":1.0,"steps":[]}',
+      ) as Map<String, Object?>;
+      expect(SessionCompliance.fromJson(v1).completion, 1);
+    });
+
     test('done too fast', () {
       final c = ComplianceEvaluator.evaluate(
         workout: easyRun(40),
@@ -329,7 +407,7 @@ void main() {
       laps: lapsFor(parts),
     );
     final json = jsonDecode(jsonEncode(c.toJson())) as Map<String, Object?>;
-    expect(json['v'], 1);
+    expect(json['v'], SessionCompliance.version);
     expect(json['verdict'], 'onTarget');
     final back = SessionCompliance.fromJson(json);
     expect(back.toJson(), json);
