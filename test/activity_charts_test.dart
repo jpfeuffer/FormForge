@@ -7,6 +7,36 @@ import 'package:formforge/features/activities/activity_charts.dart';
 import 'package:training_core/training_core.dart';
 
 void main() {
+  testWidgets('a few very slow samples do not stretch the pace axis', (
+    tester,
+  ) async {
+    const n = 3000;
+    final streams = ActivityStreamData(
+      seconds: [for (var i = 0; i < n; i++) i],
+      // 30 s of 10:25 /km right after a "resume", otherwise ~5:30 /km.
+      speed: [for (var i = 0; i < n; i++) i >= 1000 && i < 1030 ? 1.6 : 3.0],
+      heartRate: [for (var i = 0; i < n; i++) 145],
+    );
+    await tester.binding.setSurfaceSize(const Size(900, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ActivityCharts(
+              streams: streams,
+              paces: null,
+              hrZones: const [],
+            ),
+          ),
+        ),
+      ),
+    );
+    final pace = tester.widget<LineChart>(find.byType(LineChart).first);
+    // Pace is plotted as negated seconds per km; the outlier would be -625.
+    expect(pace.data.minY, greaterThan(-400));
+  });
+
   testWidgets('hovering a chart with planned targets does not throw', (
     tester,
   ) async {

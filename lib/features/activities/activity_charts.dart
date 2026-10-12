@@ -268,6 +268,14 @@ class _Band {
   final String label;
 }
 
+/// Range without the outermost 2 % per side, so outliers such as the first
+/// samples after a pause don't squash the axis.
+(double, double) _robustRange(List<double> values) {
+  final v = [...values]..sort();
+  if (v.length < 20) return (v.first, v.last);
+  return (v[(v.length * 0.02).floor()], v[(v.length * 0.98).ceil() - 1]);
+}
+
 /// A planned target range of one step, on the chart's axes (x in minutes).
 class _TargetBar {
   const _TargetBar(this.x1, this.x2, this.y1, this.y2);
@@ -421,13 +429,18 @@ class _ChartCardState extends State<_ChartCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final small = theme.textTheme.labelSmall;
-    final ys = [
-      ...widget.spots.map((s) => s.y).where((y) => !y.isNaN),
-      // Targets of steps in view stay visible even when missed by a lot.
-      for (final t in widget.targets)
-        if (t.x2 > widget.minX && t.x1 < widget.maxX) ...[t.y1, t.y2],
+    final data = [
+      for (final s in widget.spots)
+        if (!s.y.isNaN) s.y,
     ];
-    final lo = ys.reduce(math.min), hi = ys.reduce(math.max);
+    var (lo, hi) = _robustRange(data);
+    // Targets of steps in view stay visible even when missed by a lot.
+    for (final t in widget.targets) {
+      if (t.x2 > widget.minX && t.x1 < widget.maxX) {
+        lo = math.min(lo, math.min(t.y1, t.y2));
+        hi = math.max(hi, math.max(t.y1, t.y2));
+      }
+    }
     final pad = math.max((hi - lo) * 0.05, 1.0);
     final minY = lo - pad, maxY = hi + pad;
     final visible = [
@@ -572,8 +585,10 @@ class _ChartCardState extends State<_ChartCard> {
                         sideTitles: SideTitles(
                           showTitles: true,
                           reservedSize: _leftAxis,
-                          getTitlesWidget: (y, _) =>
-                              Text(widget.label(y), style: small),
+                          getTitlesWidget: (y, meta) =>
+                              y == meta.min || y == meta.max
+                              ? const SizedBox.shrink()
+                              : Text(widget.label(y), style: small),
                         ),
                       ),
                       bottomTitles: AxisTitles(
