@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:formforge/data/activity_streams.dart';
 import 'package:formforge/data/database.dart';
 import 'package:formforge/features/adaptation/matching_service.dart';
 import 'package:training_core/training_core.dart' hide TrainingPlan;
@@ -50,6 +51,31 @@ void main() {
     expect(r.linkSource, LinkSource.auto);
     expect(r.linkScore, greaterThan(ActivityMatcher.highScore));
     expect(await suggestions(), isEmpty);
+  });
+
+  test('a long pause does not shrink the run', () async {
+    final p = await addPlanned(db, date: today, workout: easy(40));
+    // 20 min run, 20 min paused with the watch stopped, 20 min run; the
+    // stored duration is timer time like Garmin's.
+    final s = streamOf([leg(1200, 3.1), leg(1200, 3.1)]);
+    final paused = ActivityStreamData(
+      seconds: [for (final t in s.seconds) t > 1200 ? t + 1200 : t],
+      speed: s.speed,
+      heartRate: s.heartRate,
+      distance: s.distance,
+      timerStops: const [(1200, 2400)],
+    );
+    final a = await addActivity(
+      db,
+      start: DateTime(2026, 10, 10, 7),
+      durationS: 2400,
+    );
+    await db.into(db.activityStreams).insert(paused.toCompanion(a));
+
+    expect(await matcher.matchAll(), 1);
+    final r = await row(p);
+    expect(r.activityId, a);
+    expect(r.linkScore, greaterThan(0.9));
   });
 
   test('swapped days are linked crosswise', () async {

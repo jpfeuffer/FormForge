@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math' show max;
 
 import 'package:drift/drift.dart';
 import 'package:fit_io/fit_io.dart';
@@ -280,11 +281,15 @@ class MatchingService {
     )..where((t) => t.activityId.equals(a.id))).getSingleOrNull();
     final data = row == null ? null : ActivityStreamData.fromRow(row);
     final local = a.startTime.toLocal();
+    // Stored durations are timer time; the matcher subtracts pauses itself.
+    final elapsed = data != null && data.length > 1
+        ? data.seconds.last - data.seconds.first
+        : 0;
     return ActivityCandidate(
       id: a.id,
       day: _day(local),
       startMinute: local.hour * 60 + local.minute,
-      durationS: a.durationS,
+      durationS: max(a.durationS, elapsed),
       distanceM: a.distanceM,
       isRun: !isStrengthSport(a.sport),
       samples: data?.toSamples(),
