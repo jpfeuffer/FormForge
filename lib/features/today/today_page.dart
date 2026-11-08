@@ -13,6 +13,7 @@ import '../../util/format.dart';
 import '../adaptation/adaptation_providers.dart';
 import '../adaptation/match_widgets.dart';
 import '../adaptation/verdict_style.dart';
+import '../../widgets/formforge_mark.dart';
 import 'load_card.dart';
 import 'suggestion_card.dart';
 import 'workout_text.dart';
@@ -28,7 +29,15 @@ class TodayPage extends ConsumerWidget {
         ref.watch(adaptationSuggestionsProvider).value ?? const [];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Today')),
+      appBar: AppBar(
+        title: const Row(
+          children: [
+            FormForgeMark(size: 32),
+            SizedBox(width: 10),
+            Text('Today'),
+          ],
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

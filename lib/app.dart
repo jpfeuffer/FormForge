@@ -10,6 +10,7 @@ import 'features/plan/plan_page.dart';
 import 'features/plan/plan_wizard_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/today/today_page.dart';
+import 'widgets/formforge_mark.dart';
 
 final _destinations = [
   (path: '/today', label: 'Today', icon: Icons.today, page: const TodayPage()),
@@ -17,26 +18,26 @@ final _destinations = [
     path: '/calendar',
     label: 'Calendar',
     icon: Icons.calendar_month,
-    page: const CalendarPage()
+    page: const CalendarPage(),
   ),
   (path: '/plan', label: 'Plan', icon: Icons.flag, page: const PlanPage()),
   (
     path: '/activities',
     label: 'Activities',
     icon: Icons.directions_run,
-    page: const ActivitiesPage()
+    page: const ActivitiesPage(),
   ),
   (
     path: '/fitness',
     label: 'Fitness',
     icon: Icons.monitor_heart,
-    page: const FitnessPage()
+    page: const FitnessPage(),
   ),
   (
     path: '/settings',
     label: 'Settings',
     icon: Icons.settings,
-    page: const SettingsPage()
+    page: const SettingsPage(),
   ),
 ];
 
@@ -45,19 +46,19 @@ final _childRoutes = {
     GoRoute(
       path: 'workout/:id',
       builder: (_, state) => WorkoutDetailPage(
-          id: int.tryParse(state.pathParameters['id']!) ?? -1),
+        id: int.tryParse(state.pathParameters['id']!) ?? -1,
+      ),
     ),
   ],
   '/activities': [
     GoRoute(
       path: ':id',
       builder: (_, state) => ActivityDetailPage(
-          id: int.tryParse(state.pathParameters['id']!) ?? -1),
+        id: int.tryParse(state.pathParameters['id']!) ?? -1,
+      ),
     ),
   ],
-  '/plan': [
-    GoRoute(path: 'new', builder: (_, _) => const PlanWizardPage()),
-  ],
+  '/plan': [GoRoute(path: 'new', builder: (_, _) => const PlanWizardPage())],
 };
 
 final router = GoRouter(
@@ -67,13 +68,15 @@ final router = GoRouter(
       builder: (context, state, shell) => _Shell(shell: shell),
       branches: [
         for (final d in _destinations)
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: d.path,
-              builder: (_, _) => d.page,
-              routes: _childRoutes[d.path] ?? const [],
-            ),
-          ]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: d.path,
+                builder: (_, _) => d.page,
+                routes: _childRoutes[d.path] ?? const [],
+              ),
+            ],
+          ),
       ],
     ),
   ],
@@ -85,9 +88,11 @@ class FormForgeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     ThemeData theme(Brightness b) => ThemeData(
-          colorScheme:
-              ColorScheme.fromSeed(seedColor: Colors.deepOrange, brightness: b),
-        );
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF245BFF),
+        brightness: b,
+      ),
+    );
     return MaterialApp.router(
       title: 'FormForge',
       theme: theme(Brightness.light),
@@ -102,27 +107,36 @@ class _Shell extends StatelessWidget {
 
   final StatefulNavigationShell shell;
 
-  void _go(int i) => shell.goBranch(i, initialLocation: i == shell.currentIndex);
+  void _go(int i) =>
+      shell.goBranch(i, initialLocation: i == shell.currentIndex);
 
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 720;
     if (wide) {
       return Scaffold(
-        body: Row(children: [
-          NavigationRail(
-            selectedIndex: shell.currentIndex,
-            onDestinationSelected: _go,
-            labelType: NavigationRailLabelType.all,
-            destinations: [
-              for (final d in _destinations)
-                NavigationRailDestination(
-                    icon: Icon(d.icon), label: Text(d.label)),
-            ],
-          ),
-          const VerticalDivider(width: 1),
-          Expanded(child: shell),
-        ]),
+        body: Row(
+          children: [
+            NavigationRail(
+              selectedIndex: shell.currentIndex,
+              onDestinationSelected: _go,
+              labelType: NavigationRailLabelType.all,
+              leading: const Padding(
+                padding: EdgeInsets.only(top: 12, bottom: 20),
+                child: FormForgeMark(size: 44),
+              ),
+              destinations: [
+                for (final d in _destinations)
+                  NavigationRailDestination(
+                    icon: Icon(d.icon),
+                    label: Text(d.label),
+                  ),
+              ],
+            ),
+            const VerticalDivider(width: 1),
+            Expanded(child: shell),
+          ],
+        ),
       );
     }
     return Scaffold(

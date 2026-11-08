@@ -3,6 +3,12 @@
 Local-first running & strength training planner with Garmin sync. No server:
 your data stays on your device, you bring your own Garmin account and AI key.
 
+## Brand
+
+![FormForge FF mark](assets/brand/formforge_mark.svg)
+
+The app and platform launcher icons use this white-and-lime FF mark on navy.
+
 - Adaptive running plans from target paces and past runs (VDOT, MAS, critical
   speed, LTHR), regular test runs, HR/pace evaluation.
 - Garmin Connect sync (activities in, structured workouts + calendar out),
