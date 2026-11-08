@@ -13,6 +13,19 @@ class MainActivity : FlutterActivity() {
     private var pending: MethodChannel.Result? = null
     private val requestCode = 4201
 
+    private fun canWrite(uri: Uri): Boolean {
+        val granted = contentResolver.persistedUriPermissions.any {
+            it.uri == uri && it.isWritePermission
+        }
+        if (!granted) return false
+        return contentResolver.query(
+            uri, arrayOf(DocumentsContract.Document.COLUMN_FLAGS), null, null, null
+        ).use { cursor ->
+            require(cursor != null && cursor.moveToFirst()) { "Cannot inspect document capabilities" }
+            (cursor.getInt(0) and DocumentsContract.Document.FLAG_SUPPORTS_WRITE) != 0
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "formforge/shared_file")
@@ -73,6 +86,9 @@ class MainActivity : FlutterActivity() {
                                     runOnUiThread { result.success(file.path) }
                                 } else {
                                     requireNotNull(path) { "Missing upload file" }
+                                    require(canWrite(uri)) {
+                                        "This document is read-only. Choose a writable file or use Google Drive sign-in."
+                                    }
                                     contentResolver.openOutputStream(uri, "wt").use { output ->
                                         requireNotNull(output) { "Provider cannot overwrite this document" }
                                         File(path).inputStream().use { it.copyTo(output) }
@@ -102,16 +118,14 @@ class MainActivity : FlutterActivity() {
         try {
             val selected = requireNotNull(data) { "No document selected" }
             val uri = requireNotNull(selected.data) { "No document selected" }
-            val required = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            require((selected.flags and required) == required) { "Choose a provider with read/write document access" }
-            contentResolver.takePersistableUriPermission(uri, required)
-            contentResolver.query(
-                uri, arrayOf(DocumentsContract.Document.COLUMN_FLAGS), null, null, null
-            ).use { cursor ->
-                require(cursor != null && cursor.moveToFirst()) { "Cannot inspect document capabilities" }
-                require((cursor.getInt(0) and DocumentsContract.Document.FLAG_SUPPORTS_WRITE) != 0) {
-                    "This provider does not support updating the selected file"
-                }
+            val granted = selected.flags and
+                (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            require((granted and Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0) {
+                "Choose a provider with persistent read access"
+            }
+            contentResolver.takePersistableUriPermission(uri, granted)
+            require(canWrite(uri)) {
+                "This provider does not support updating the selected file. Choose a writable local document or use Google Drive sign-in."
             }
             result.success(uri.toString())
         } catch (e: Exception) {

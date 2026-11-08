@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'database.dart';
-import 'shared_file.dart';
 import 'snapshot.dart';
+import 'snapshot_store.dart';
 
 enum SnapshotAction { unchanged, upload, restore, conflict }
 
@@ -16,9 +16,11 @@ SnapshotAction snapshotAction(String local, String remote, String? baseline) {
 }
 
 class FileSync {
-  FileSync(this.db, this.directory);
+  FileSync(this.db, this.directory, {SnapshotStore? store})
+    : store = store ?? FileSnapshotStore();
   final AppDatabase db;
   final Directory directory;
+  final SnapshotStore store;
   String? target;
   String? baseline;
   bool busy = false;
@@ -27,7 +29,7 @@ class FileSync {
 
   Future<void> load() async {
     final state = File(
-      '${directory.path}${Platform.pathSeparator}shared-file.json',
+      '${directory.path}${Platform.pathSeparator}${store.stateFileName}',
     );
     if (!await state.exists()) return;
     final value =
@@ -41,15 +43,16 @@ class FileSync {
 
   Future<void> save() async {
     await directory.create(recursive: true);
-    await File('${directory.path}${Platform.pathSeparator}shared-file.json')
-        .writeAsString(
-          jsonEncode({
-            'target': target,
-            'baseline': baseline,
-            'lastSync': lastSync?.toIso8601String(),
-          }),
-          flush: true,
-        );
+    await File(
+      '${directory.path}${Platform.pathSeparator}${store.stateFileName}',
+    ).writeAsString(
+      jsonEncode({
+        'target': target,
+        'baseline': baseline,
+        'lastSync': lastSync?.toIso8601String(),
+      }),
+      flush: true,
+    );
   }
 
   Future<File> recovery(Snapshot snapshot) async {
@@ -112,16 +115,17 @@ class FileSync {
     if (create) {
       final local = await Snapshot.capture(db);
       await recovery(local);
-      await SharedFile.write(path, local.encode());
-      final check = await Snapshot.decode(await SharedFile.read(path));
-      if (check.revision != local.revision) {
+      await store.write(path, local, null);
+      final check = await store.read(path);
+      if (check?.snapshot.revision != local.revision) {
         throw StateError('Backup write verification failed');
       }
       baseline = local.revision;
       lastSync = DateTime.now();
     } else {
-      final remote = await Snapshot.decode(await SharedFile.read(path));
-      await remote.validate();
+      final remote = await store.read(path);
+      if (remote == null) throw StateError('No backup found');
+      await remote.snapshot.validate();
       baseline = null;
       lastSync = null;
     }
@@ -138,9 +142,16 @@ class FileSync {
     busy = true;
     try {
       final local = await Snapshot.capture(db);
-      final remote = await Snapshot.decode(await SharedFile.read(path));
-      await remote.validate();
-      var action = snapshotAction(local.revision, remote.revision, baseline);
+      final remote = await store.read(path);
+      if (remote != null) await remote.snapshot.validate();
+      if (remote == null && baseline != null) {
+        throw StateError(
+          'The previous cloud backup is missing. Use Reset Google backup connection to explicitly start a new backup history.',
+        );
+      }
+      var action = remote == null
+          ? SnapshotAction.upload
+          : snapshotAction(local.revision, remote.snapshot.revision, baseline);
       if (action == SnapshotAction.restore ||
           action == SnapshotAction.conflict) {
         final selected = await choose(action);
@@ -151,16 +162,16 @@ class FileSync {
         }
         action = selected;
       }
-      final latest = await Snapshot.decode(await SharedFile.read(path));
-      if (latest.revision != remote.revision) {
+      final latest = await store.read(path);
+      if (latest?.version != remote?.version) {
         throw StateError('Shared file changed during sync. Please retry.');
       }
       if (action == SnapshotAction.upload) {
         await recovery(local);
-        await recovery(remote);
-        await SharedFile.write(path, local.encode());
-        final check = await Snapshot.decode(await SharedFile.read(path));
-        if (check.revision != local.revision) {
+        if (remote != null) await recovery(remote.snapshot);
+        await store.write(path, local, remote);
+        final check = await store.read(path);
+        if (check?.snapshot.revision != local.revision) {
           throw StateError('Backup write verification failed');
         }
         baseline = local.revision;
@@ -170,20 +181,21 @@ class FileSync {
           if ((await Snapshot.capture(db)).revision != local.revision) {
             throw StateError('Local data changed during sync. Please retry.');
           }
-          await remote.apply(
+          if (remote == null) throw StateError('No snapshot to restore');
+          await remote.snapshot.apply(
             db,
             Directory('${directory.path}${Platform.pathSeparator}restored-fit'),
           );
         });
         restoreGeneration++;
-        baseline = remote.revision;
+        baseline = remote!.snapshot.revision;
       } else {
         baseline = local.revision;
       }
       lastSync = DateTime.now();
       await save();
       return switch (action) {
-        SnapshotAction.upload => 'Shared file updated. Cloud upload timing is controlled by your provider.',
+        SnapshotAction.upload => store.uploadMessage,
         SnapshotAction.restore =>
           'Backup restored. Previous data is saved in ${directory.path}${Platform.pathSeparator}recovery.',
         _ => 'Already up to date',

@@ -10,6 +10,7 @@ class Secrets {
   static const llmApiKey = 'llm.apiKey';
   static const garminOauth1 = 'garmin.oauth1';
   static const garminOauth2 = 'garmin.oauth2';
+  static const googleDesktopTokens = 'google.desktopTokens';
 
   Future<String?> read(String key) => _storage.read(key: key);
 
