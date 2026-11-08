@@ -746,17 +746,7 @@ final class _MovingTime {
 
   final List<Pause> _cuts;
 
-  int at(int second) {
-    var cut = 0;
-    for (final p in _cuts) {
-      if (second >= p.end) {
-        cut += p.seconds;
-      } else if (second > p.start) {
-        cut += second - p.start;
-      }
-    }
-    return second - cut;
-  }
+  int at(int second) => Pauses.movingSecond(_cuts, second);
 
   List<Sample> samples(List<Sample> list) => _cuts.isEmpty
       ? list

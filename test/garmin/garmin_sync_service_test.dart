@@ -16,6 +16,7 @@ void main() {
 
   test('upserts Garmin activities by externalId', () async {
     var name = 'Run';
+    var withWorkout = true;
     final http = FakeAdapter(
       (_) => FakeResponse.json([
         {
@@ -28,6 +29,7 @@ void main() {
           'averageHR': 150.0,
           'maxHR': 170.0,
           'averageSpeed': 3.33,
+          'workoutId': withWorkout ? 555 : null,
         },
       ]),
     );
@@ -47,6 +49,7 @@ void main() {
     await (db.update(db.activities)..where((t) => t.externalId.equals('7')))
         .write(const ActivitiesCompanion(fitPath: Value('/fit/7.fit')));
     name = 'Renamed run';
+    withWorkout = false;
     expect(await sync.syncRecent(), 1);
 
     final rows = await db.select(db.activities).get();
@@ -61,5 +64,7 @@ void main() {
       (5000.0, 1500, 150.0, 170.0, 3.33),
     );
     expect(a.fitPath, '/fit/7.fit');
+    // A later summary without a workout id keeps the stored one.
+    expect(a.garminWorkoutId, '555');
   });
 }

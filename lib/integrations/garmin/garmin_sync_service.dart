@@ -158,6 +158,7 @@ class GarminSyncService {
         avgHr: Value(a.avgHr),
         maxHr: Value(a.maxHr),
         avgSpeed: Value(a.avgSpeed),
+        garminWorkoutId: Value.absentIfNull(a.workoutId),
       );
       // fitPath is left untouched on update.
       await _db

@@ -158,9 +158,11 @@ void main() {
           'averageHR': 148.0,
           'maxHR': 171,
           'averageSpeed': 3.313,
+          'workoutId': 786412842,
         },
         {
           'activityId': 2,
+          'workoutId': 0,
           'beginTimestamp': 1790000000000,
           'activityType': {'typeKey': 'strength_training'},
           'duration': 1800,
@@ -178,7 +180,9 @@ void main() {
     expect(run.distanceM, 10012.5);
     expect(run.durationS, 3021.7);
     expect((run.avgHr, run.maxHr, run.avgSpeed), (148.0, 171.0, 3.313));
+    expect(run.workoutId, '786412842');
     final lift = list.last;
+    expect(lift.workoutId, isNull);
     expect(lift.typeKey, 'strength_training');
     expect(
       lift.startTime,

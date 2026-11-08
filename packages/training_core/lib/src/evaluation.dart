@@ -59,7 +59,23 @@ abstract final class RunEvaluation {
 
   /// Aerobic decoupling (Pa:HR) in percent: EF drop from first to second half.
   /// Below ~5 % on a steady long run indicates good aerobic endurance.
-  static double? aerobicDecoupling(List<Sample> samples) {
+  /// With [pauses], the halves are split in moving time, so a long watch
+  /// pause does not shift the midpoint.
+  static double? aerobicDecoupling(
+    List<Sample> samples, {
+    List<Pause> pauses = const [],
+  }) {
+    if (pauses.any((p) => p.kind == PauseKind.paused)) {
+      samples = [
+        for (final s in samples)
+          Sample(
+            second: Pauses.movingSecond(pauses, s.second),
+            speed: s.speed,
+            hr: s.hr,
+            distance: s.distance,
+          ),
+      ];
+    }
     if (samples.length < 4) return null;
     final midTime = (samples.first.second + samples.last.second) / 2;
     final first = samples.where((s) => s.second <= midTime).toList();

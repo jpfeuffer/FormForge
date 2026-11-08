@@ -97,6 +97,20 @@ abstract final class Pauses {
     return all;
   }
 
+  /// [second] in moving time, i.e. with watch-paused intervals cut out.
+  static int movingSecond(List<Pause> pauses, int second) {
+    var cut = 0;
+    for (final p in pauses) {
+      if (p.kind != PauseKind.paused || p.seconds <= 0) continue;
+      if (second >= p.end) {
+        cut += p.seconds;
+      } else if (second > p.start) {
+        cut += second - p.start;
+      }
+    }
+    return second - cut;
+  }
+
   /// Elapsed, paused, stopped and moving seconds within [from]..[to].
   static TimeSplit split(List<Pause> pauses, num from, num to) {
     var paused = 0, stopped = 0;

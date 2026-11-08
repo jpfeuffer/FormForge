@@ -46,8 +46,11 @@ class _Details extends ConsumerWidget {
     final analysis = ref.watch(activityAnalysisProvider(a.id)).value;
     final streams = ref.watch(activityStreamProvider(a.id)).value;
     final planned = ref.watch(plannedForActivityProvider(a.id)).value;
-    final plannedSteps =
-        (planned == null ? null : parseCompliance(planned))?.steps ?? const [];
+    final compliance = planned == null ? null : parseCompliance(planned);
+    final plannedSteps = compliance?.steps ?? const [];
+    // Evaluated runs use the work-part value, same as the Today page.
+    final decoupling =
+        compliance != null ? compliance.decoupling : analysis?.decoupling;
     final theme = Theme.of(context);
 
     return ListView(
@@ -85,10 +88,10 @@ class _Details extends ConsumerWidget {
                 analysis!.efficiencyFactor!.toStringAsFixed(2),
                 info: EvalInfo.efficiency,
               ),
-            if (analysis?.decoupling != null)
+            if (decoupling != null)
               _Stat(
                 'Decoupling (Pa:HR)',
-                '${analysis!.decoupling!.toStringAsFixed(1)} %',
+                '${decoupling.toStringAsFixed(1)} %',
                 info: EvalInfo.decoupling,
               ),
             if (analysis?.hrTss != null)

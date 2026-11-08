@@ -116,6 +116,19 @@ void main() {
       expect(d, closeTo(6.7, 0.2));
     });
 
+    test('a long watch pause does not shift the halves', () {
+      // 600 s moving, 3000 s paused, then 3000 s moving with HR rising at 1800.
+      final samples = [
+        for (var s = 0; s <= 600; s += 5) Sample(second: s, speed: 3, hr: 140),
+        for (var s = 3600; s <= 6600; s += 5)
+          Sample(second: s, speed: 3, hr: s < 4800 ? 140 : 150),
+      ];
+      const pause = [Pause(600, 3600, PauseKind.paused)];
+      expect(RunEvaluation.aerobicDecoupling(samples, pauses: pause),
+          closeTo(6.7, 0.3));
+      expect(RunEvaluation.aerobicDecoupling(samples), closeTo(4.1, 0.3));
+    });
+
     test('pace compliance', () {
       final samples = [
         for (var s = 0; s <= 100; s++)

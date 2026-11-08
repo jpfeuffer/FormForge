@@ -36,6 +36,7 @@ class GarminActivitySummary {
     this.avgHr,
     this.maxHr,
     this.avgSpeed,
+    this.workoutId,
   });
 
   factory GarminActivitySummary.fromJson(Map<String, Object?> json) {
@@ -50,6 +51,7 @@ class GarminActivitySummary {
       avgHr: (json['averageHR'] as num?)?.toDouble(),
       maxHr: (json['maxHR'] as num?)?.toDouble(),
       avgSpeed: (json['averageSpeed'] as num?)?.toDouble(),
+      workoutId: _workoutId(json['workoutId']),
     );
   }
 
@@ -68,6 +70,15 @@ class GarminActivitySummary {
 
   /// m/s
   final double? avgSpeed;
+
+  /// Id of the Garmin workout the activity was started from, if any.
+  final String? workoutId;
+
+  static String? _workoutId(Object? raw) => switch (raw) {
+    num n when n > 0 => '${n.toInt()}',
+    String s when s.isNotEmpty && s != '0' => s,
+    _ => null,
+  };
 
   static DateTime _startTime(Map<String, Object?> json) {
     // startTimeGMT is "yyyy-MM-dd HH:mm:ss" without a zone designator.

@@ -21,8 +21,9 @@ class ActivityAnalysis {
   factory ActivityAnalysis.compute(
     Activity activity,
     List<Sample> samples,
-    AthleteProfile? profile,
-  ) {
+    AthleteProfile? profile, {
+    List<Pause> pauses = const [],
+  }) {
     final lthr = profile?.lthr;
     final rest = profile?.restHr;
     final max = profile?.maxHr;
@@ -41,7 +42,7 @@ class ActivityAnalysis {
     final avgHr = activity.avgHr;
     return ActivityAnalysis(
       efficiencyFactor: RunEvaluation.efficiencyFactor(samples),
-      decoupling: RunEvaluation.aerobicDecoupling(samples),
+      decoupling: RunEvaluation.aerobicDecoupling(samples, pauses: pauses),
       zoneModel: hasHr ? model : null,
       hrZones: hasHr
           ? [

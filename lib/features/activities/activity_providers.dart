@@ -76,5 +76,10 @@ final activityAnalysisProvider = FutureProvider.family<ActivityAnalysis?, int>((
   final streams = await ref.watch(activityStreamProvider(id).future);
   final profile = await ref.watch(profileProvider.future);
   if (activity == null || streams == null) return null;
-  return ActivityAnalysis.compute(activity, streams.toSamples(), profile);
+  return ActivityAnalysis.compute(
+    activity,
+    streams.toSamples(),
+    profile,
+    pauses: streams.pauses,
+  );
 });
