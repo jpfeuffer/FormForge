@@ -5,6 +5,7 @@ import '../../ai/llm_client.dart';
 import '../../data/secrets.dart';
 import '../../integrations/garmin/garmin_settings_section.dart';
 import '../../providers.dart';
+import 'file_sync_section.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -126,6 +127,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const Divider(height: 32),
           Text('Garmin Connect', style: text.titleMedium),
           const GarminSettingsSection(),
+          const Divider(height: 32),
+          const FileSyncSection(),
         ],
       ),
     );

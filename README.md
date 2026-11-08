@@ -107,3 +107,44 @@ release. Download the `formforge-android-release` artifact from that run and
 test the APK before sharing it. The signing key is not included in the
 artifact. Keep a secure backup of the original keystore; GitHub secrets alone
 are not a replacement for that backup.
+
+## Shared backup file (Android and desktop)
+
+In **Settings > Shared backup file**, create `training.formforge` in a synced
+folder on desktop, or create a document through Android's file picker. On the
+other device, connect the same existing file. Press **Sync** to exchange
+compressed snapshots containing all training data and referenced FIT files.
+Garmin tokens and AI API keys are not included; sign in separately on each
+device. The shared-file connection and revision baseline stay device-local.
+
+OneDrive, Dropbox and Google Drive synced folders work as ordinary files on
+desktop. Android clouds are not mounted paths: this feature remembers a
+document URI with persistent read/write permission. Only providers exposing
+writable documents through Android's picker can work; availability differs
+by provider, app version and account. A provider that offers only sharing or
+read-only documents cannot be used. No provider API registration is required.
+iOS remembered cloud documents are not implemented.
+
+**This is backup/restore, not two-way merging.** A local-only change updates
+the shared backup. A remote-only change prompts before replacing local data.
+When both snapshots changed (or a new device connects), choose which to keep
+or cancel. Use one device at a time and wait for your cloud app's upload to
+finish before switching devices. Provider caches and simultaneous writes
+cannot be made reliably conflict-free through file access alone.
+
+Snapshots are compressed but **not encrypted**: they contain sensitive
+training, profile and GPS data. Keep them private. Before replacements, local
+recovery copies are saved; restore them with **Restore local recovery backup**.
+Recovery copies are not automatically deleted. Restore validates the current
+backup format/schema and references, remaps FIT paths, and replaces database
+rows in one transaction. It does not copy a live SQLite database file.
+Missing original FIT files, invalid backups, revoked document permissions and
+provider failures are surfaced in Settings, rather than silently dropping data.
+
+The **Sync** status confirms document read/write verification, not completion
+of the provider's cloud upload. If access expires, reconnect the same document.
+If a write fails, preserve local data and recover the shared file using the
+provider's version history or create a new shared file. This first version
+exchanges the complete snapshot on demand; it does not run in the background.
+The current expanded snapshot size limit is 512 MiB; an oversized export or
+import fails explicitly.
